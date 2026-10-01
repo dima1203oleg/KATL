@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowRight,
   Download,
@@ -25,6 +25,7 @@ import {
   Sun,
   Award,
   Sparkles,
+  Database,
 } from 'lucide-react';
 import { KatlPage } from './KatlNavbar';
 import { CatlContainerGraphic, ArchitectureFlowGraphic } from './KatlVisualAssets';
@@ -48,8 +49,27 @@ export const KatlProductDetailPage: React.FC<KatlProductDetailPageProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'specs' | 'arch' | 'models' | 'apps' | 'docs'>('overview');
   const [activeMediaTab, setActiveMediaTab] = useState<'3d' | 'photo'>('3d');
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
+  const [pimData, setPimData] = useState<{
+    provenance?: {
+      sourceUrl?: string;
+      verifiedAt?: string;
+      verifiedBy?: string;
+      confidence?: string;
+    };
+  } | null>(null);
 
   const product = getTitanProductById(productId);
+
+  useEffect(() => {
+    fetch(`/api/v1/products/${productId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.provenance) {
+          setPimData(d);
+        }
+      })
+      .catch(() => {});
+  }, [productId]);
 
   const viewAngles = [
     { title: 'Ізометричний вигляд', note: 'Загальна компоновка 20ft / Outdoor' },
@@ -94,11 +114,20 @@ export const KatlProductDetailPage: React.FC<KatlProductDetailPageProps> = ({
 
           {/* Hero Main Info */}
           <div className="max-w-3xl space-y-4 mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-mono">
-              <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
-              <span>{product.category}</span>
-              <span>·</span>
-              <span className="font-bold">{product.family}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-mono">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+                <span>{product.category}</span>
+                <span>·</span>
+                <span className="font-bold">{product.family}</span>
+              </div>
+
+              {pimData?.provenance && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-mono border border-emerald-500/30">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>PIM Verified: {pimData.provenance.verifiedBy}</span>
+                </div>
+              )}
             </div>
 
             <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight">

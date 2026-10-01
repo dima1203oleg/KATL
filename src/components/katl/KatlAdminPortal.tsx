@@ -34,8 +34,7 @@ export const KatlAdminPortal: React.FC<KatlAdminPortalProps> = ({
 }) => {
   const [adminTab, setAdminTab] = useState<'dashboard' | 'pim' | 'sync' | 'quality' | 'localization' | 'leads' | 'finops' | 'audit'>('dashboard');
 
-  // Interactive mock state for CATL Sync change review
-  const [syncChanges, setSyncChanges] = useState([
+  const [syncChanges, setSyncChanges] = useState<any[]>([
     {
       id: 'DIFF-01',
       product: 'CATL TENER H',
@@ -56,19 +55,99 @@ export const KatlAdminPortal: React.FC<KatlAdminPortalProps> = ({
     },
   ]);
 
-  const [leadsList, setLeadsList] = useState([
-    { id: 'LEAD-901', company: 'ПрАТ «Агро-Союз»', power: '2.0 MW', capacity: '4.0 MWh', status: 'NEW_RFQ', rep: 'Інженерний відділ Київ' },
-    { id: 'LEAD-884', company: 'ТОВ «Дніпро Картон»', power: '1.2 MW', capacity: '2.4 MWh', status: 'PROPOSAL_SENT', rep: 'Олександр К.' },
-    { id: 'LEAD-871', company: 'Дата-центр «Воля Хмара»', power: '5.0 MW', capacity: '10.0 MWh', status: 'CONTRACT_REVIEW', rep: 'Дмитро М.' },
-  ]);
+  const [leadsList, setLeadsList] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [aiStats, setAiStats] = useState<any>(null);
 
-  const handleApproveSync = (id: string) => {
+  // Fetch real data on mount
+  React.useEffect(() => {
+    fetch('/api/v1/rfq')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data && Array.isArray(d.data)) {
+          setLeadsList(
+            d.data.map((item: any) => ({
+              id: item.id,
+              company: item.companyName,
+              power: item.powerKw ? `${(item.powerKw / 1000).toFixed(1)} MW` : '1.5 MW',
+              capacity: item.capacityKwh ? `${(item.capacityKwh / 1000).toFixed(1)} MWh` : '3.0 MWh',
+              status: item.status,
+              rep: item.contactPerson,
+              phone: item.phone,
+              email: item.email,
+              date: item.createdAt,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/v1/sync/changes')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data && Array.isArray(d.data) && d.data.length > 0) {
+          setSyncChanges(
+            d.data.map((c: any) => ({
+              id: c.id,
+              product: c.productName,
+              field: c.field,
+              oldVal: typeof c.oldValue === 'object' ? JSON.stringify(c.oldValue) : String(c.oldValue),
+              newVal: typeof c.newValue === 'object' ? JSON.stringify(c.newValue) : String(c.newValue),
+              source: c.sourceUrl,
+              status: c.status === 'PENDING_REVIEW' ? 'PENDING' : c.status,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/v1/ai/gateway/stats')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data) setAiStats(d.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleRunSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/v1/sync/run', { method: 'POST' });
+      const data = await res.json();
+      if (data.data?.detectedChanges) {
+        setSyncChanges((prev) => [
+          ...data.data.detectedChanges.map((c: any) => ({
+            id: c.id,
+            product: c.productName,
+            field: c.field,
+            oldVal: String(c.oldValue),
+            newVal: String(c.newValue),
+            source: c.sourceUrl,
+            status: 'PENDING',
+          })),
+          ...prev,
+        ]);
+      }
+    } catch (e) {
+      console.warn('Sync run error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleApproveSync = async (id: string) => {
+    try {
+      await fetch(`/api/v1/sync/changes/${id}/approve`, { method: 'POST' });
+    } catch (e) {}
     setSyncChanges((prev) =>
       prev.map((c) => (c.id === id ? { ...c, status: 'APPROVED' } : c))
     );
   };
 
-  const handleRejectSync = (id: string) => {
+  const handleRejectSync = async (id: string) => {
+    try {
+      await fetch(`/api/v1/sync/changes/${id}/reject`, { method: 'POST' });
+    } catch (e) {}
     setSyncChanges((prev) =>
       prev.map((c) => (c.id === id ? { ...c, status: 'REJECTED' } : c))
     );
@@ -289,13 +368,24 @@ export const KatlAdminPortal: React.FC<KatlAdminPortalProps> = ({
           {/* TAB 3: CATL SYNC & CHANGE REVIEW */}
           {adminTab === 'sync' && (
             <div className="space-y-6">
-              <div>
-                <h2 className="font-display text-2xl font-black text-white">
-                  CATL Sync: Контроль змін специфікацій виробника
-                </h2>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Порівняння side-by-side старих та нових значень із вимогою інженерного підтвердження
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-2xl font-black text-white">
+                    CATL Sync: Контроль змін специфікацій виробника
+                  </h2>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Порівняння side-by-side старих та нових значень із вимогою інженерного підтвердження
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleRunSync}
+                  disabled={isSyncing}
+                  className="px-4 py-2.5 rounded-xl bg-[#0077ff] hover:bg-blue-600 active:scale-[0.98] text-white font-bold text-xs transition-all cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50 shadow-md shadow-blue-500/20"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Опитування джерел CATL...' : 'Запустити CATL Sync Crawler'}</span>
+                </button>
               </div>
 
               <div className="space-y-4">

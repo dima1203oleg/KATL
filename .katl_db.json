@@ -1,0 +1,412 @@
+{
+  "products": [
+    {
+      "id": "catl-tener-h",
+      "name": "CATL TENER H",
+      "family": "TENER Series",
+      "category": "Utility Scale",
+      "shortDesc": "Флагманська utility-scale система накопичення енергії надвисокої щільності.",
+      "highlight": "До 9.008 МВт·год у стандартному 20-футовому контейнері",
+      "status": "AVAILABLE",
+      "type": "tener-h",
+      "energySpecs": {
+        "nominalCapacity": "9.008 МВт·год",
+        "usableCapacity": "8.85 МВт·год (DoD 98%)",
+        "nominalVoltage": "1500 V DC",
+        "voltageRange": "1250 ~ 1700 V DC",
+        "cRate": "0.5C (2-годинний розряд) / опціонально 1C",
+        "efficiencyRoundTrip": "≥ 95.5% (DC-DC)"
+      },
+      "cellSpecs": {
+        "chemistry": "LFP (Lithium Iron Phosphate)",
+        "cellModel": "CATL Ultra-Dense 575 Ah",
+        "cellCapacity": "575 Ah",
+        "cycleLife": "15 000+ циклів (20 років)",
+        "degradationFirstYears": "0% деградація перші 5 років"
+      },
+      "mechanicalSpecs": {
+        "dimensions": "6058 × 2438 × 2896 мм (20ft High Cube)",
+        "weight": "≤ 48 000 кг (повністю споряджений)",
+        "containerStandard": "ISO 668 1CC",
+        "protectionRating": "IP55 / C5-M антикорозійне покриття"
+      },
+      "thermalSpecs": {
+        "coolingMethod": "Прецизійне двоконтурне рідинне охолодження (Liquid Cooling)",
+        "tempControlAccuracy": "Різниця температур між комірками ΔT ≤ 2.5°C",
+        "operatingTempRange": "-30°C ... +55°C"
+      },
+      "safetySpecs": {
+        "fireSuppression": "Novec 1230 / FK-5-1-12 автоматична система + водяний сплінкерний ввід",
+        "deflagrationProtection": "Дефлаграційні вибухорозвантажувальні панелі NFPA 68",
+        "gasDetection": "Багатоканальні сенсори CO, H2, диму та температури",
+        "certifications": [
+          "NFPA 855",
+          "UL 9540A",
+          "UL 1973",
+          "IEC 62619",
+          "ДСТУ EN 62619",
+          "CE"
+        ]
+      },
+      "compatibility": {
+        "pcs": [
+          "SMA Sunny Central Storage",
+          "Ingeteam Ingecon Sun Storage",
+          "Sineng 2.5MW"
+        ],
+        "ems": [
+          "CATL Native AI EMS",
+          "Siemens Spectrum Power",
+          "DNV GEMS"
+        ],
+        "transformer": "10/35 кВ блочний двообмотковий"
+      },
+      "provenance": {
+        "sourceUrl": "https://www.catl.com/en/ess/",
+        "verifiedAt": "2026-09-15T10:00:00Z",
+        "verifiedBy": "Senior BESS Systems Engineer",
+        "confidence": "OFFICIAL_CATL",
+        "revision": 1,
+        "lastUpdated": "2026-10-01T08:00:00Z"
+      }
+    },
+    {
+      "id": "catl-tener-s",
+      "name": "CATL TENER S",
+      "family": "TENER Series",
+      "category": "Utility Scale",
+      "shortDesc": "Еталонна масова система накопичення енергії для масштабних сонячних та вітрових парків.",
+      "highlight": "6.25 МВт·год, 0% деградація, 15 000 циклів",
+      "status": "AVAILABLE",
+      "type": "tener-s",
+      "energySpecs": {
+        "nominalCapacity": "6.25 МВт·год",
+        "usableCapacity": "6.12 МВт·год",
+        "nominalVoltage": "1500 V DC",
+        "voltageRange": "1200 ~ 1680 V DC",
+        "cRate": "0.5C / 1C",
+        "efficiencyRoundTrip": "≥ 95.0%"
+      },
+      "cellSpecs": {
+        "chemistry": "LFP",
+        "cellModel": "CATL 314 Ah LFP Gen 2",
+        "cellCapacity": "314 Ah",
+        "cycleLife": "15 000 циклів",
+        "degradationFirstYears": "0% втрат ємності за перші 5 років"
+      },
+      "mechanicalSpecs": {
+        "dimensions": "6058 × 2438 × 2896 мм",
+        "weight": "43 500 кг",
+        "containerStandard": "20ft ISO",
+        "protectionRating": "IP55"
+      },
+      "thermalSpecs": {
+        "coolingMethod": "Рідинне охолодження",
+        "tempControlAccuracy": "ΔT ≤ 3.0°C",
+        "operatingTempRange": "-30°C ... +50°C"
+      },
+      "safetySpecs": {
+        "fireSuppression": "Газове пожежогасіння + аерозоль",
+        "deflagrationProtection": "NFPA 68 дефлаграційні вікна",
+        "gasDetection": "4-рівневий сенсорний моніторинг газів",
+        "certifications": [
+          "NFPA 855",
+          "UL 9540A",
+          "IEC 62619",
+          "CE"
+        ]
+      },
+      "compatibility": {
+        "pcs": [
+          "Ingeteam",
+          "SMA",
+          "Sungrow"
+        ],
+        "ems": [
+          "CATL EMS",
+          "EcoStruxure"
+        ],
+        "transformer": "0.69 / 10(35) кВ"
+      },
+      "provenance": {
+        "sourceUrl": "https://www.catl.com/en/ess/",
+        "verifiedAt": "2026-09-15T10:00:00Z",
+        "verifiedBy": "Senior BESS Systems Engineer",
+        "confidence": "OFFICIAL_CATL",
+        "revision": 1,
+        "lastUpdated": "2026-10-01T08:00:00Z"
+      }
+    },
+    {
+      "id": "catl-enerone-plus",
+      "name": "CATL EnerOne Plus",
+      "family": "EnerOne Series",
+      "category": "Commercial & Industrial",
+      "shortDesc": "Компактна зовнішня кабінетна система для промислових підприємств та комерційних об’єктів.",
+      "highlight": "372.7 кВт·год на 1.3 м² площі, All-in-One Outdoor",
+      "status": "AVAILABLE",
+      "type": "enerone",
+      "energySpecs": {
+        "nominalCapacity": "372.7 кВт·год",
+        "usableCapacity": "365 кВт·год",
+        "nominalVoltage": "1146 V DC",
+        "voltageRange": "920 ~ 1310 V DC",
+        "cRate": "0.5C - 1C",
+        "efficiencyRoundTrip": "≥ 94.5%"
+      },
+      "cellSpecs": {
+        "chemistry": "LFP",
+        "cellModel": "CATL 280 / 314 Ah",
+        "cellCapacity": "314 Ah",
+        "cycleLife": "10 000+ циклів",
+        "degradationFirstYears": "< 1.5% на рік"
+      },
+      "mechanicalSpecs": {
+        "dimensions": "1300 × 1300 × 2250 мм",
+        "weight": "3 600 кг",
+        "containerStandard": "Шафа зовнішнього монтажу",
+        "protectionRating": "IP55"
+      },
+      "thermalSpecs": {
+        "coolingMethod": "Вбудоване рідинне охолодження",
+        "tempControlAccuracy": "ΔT ≤ 2.5°C",
+        "operatingTempRange": "-30°C ... +55°C"
+      },
+      "safetySpecs": {
+        "fireSuppression": "Вбудована автономна аерозольна система + датчики",
+        "deflagrationProtection": "Вентиляційні клапани тиску",
+        "gasDetection": "Вбудований газоаналізатор",
+        "certifications": [
+          "UL 9540",
+          "UL 1973",
+          "IEC 62619",
+          "ДСТУ EN 62619"
+        ]
+      },
+      "compatibility": {
+        "pcs": [
+          "ATESS 100/250kW",
+          "Sinexcel",
+          "Deye Hybrid"
+        ],
+        "ems": [
+          "Local SCADA",
+          "Web Cloud EMS"
+        ],
+        "transformer": "0.4 / 10 кВ"
+      },
+      "provenance": {
+        "sourceUrl": "https://www.catl.com/en/ess/",
+        "verifiedAt": "2026-09-15T10:00:00Z",
+        "verifiedBy": "Senior BESS Systems Engineer",
+        "confidence": "OFFICIAL_CATL",
+        "revision": 1,
+        "lastUpdated": "2026-10-01T08:00:00Z"
+      }
+    },
+    {
+      "id": "catl-tener-sodium",
+      "name": "CATL TENER Sodium (Na-ion)",
+      "family": "TENER Series",
+      "category": "Sodium-ion",
+      "shortDesc": "Натрій-іонна система накопичення енергії нового покоління для екстремальних умов.",
+      "highlight": "Робота при -40°C без підігріву, надшвидкий відгук, глобальний реліз 2027",
+      "status": "COMMERCIAL_2027",
+      "type": "sodium",
+      "energySpecs": {
+        "nominalCapacity": "4.5 МВт·год",
+        "usableCapacity": "4.4 МВт·год",
+        "nominalVoltage": "1500 V DC",
+        "voltageRange": "1000 ~ 1600 V DC",
+        "cRate": "1C - 4C (миттєвий відгук)",
+        "efficiencyRoundTrip": "≥ 92.0%"
+      },
+      "cellSpecs": {
+        "chemistry": "Sodium-ion (Натрій-іон CATL Gen 2)",
+        "cellModel": "CATL Na-Cell 200 Ah",
+        "cellCapacity": "200 Ah",
+        "cycleLife": "8 000+ циклів",
+        "degradationFirstYears": "Стабільна ємність"
+      },
+      "mechanicalSpecs": {
+        "dimensions": "6058 × 2438 × 2896 мм",
+        "weight": "44 000 кг",
+        "containerStandard": "20ft ISO",
+        "protectionRating": "IP55"
+      },
+      "thermalSpecs": {
+        "coolingMethod": "Рідинне охолодження з антифризом",
+        "tempControlAccuracy": "ΔT ≤ 3.5°C",
+        "operatingTempRange": "-40°C ... +60°C"
+      },
+      "safetySpecs": {
+        "fireSuppression": "NFPA 855 сумісна система",
+        "deflagrationProtection": "Вибухозахист",
+        "gasDetection": "Повний моніторинг",
+        "certifications": [
+          "IEC 62619 (pre-cert)",
+          "UN 38.3"
+        ]
+      },
+      "compatibility": {
+        "pcs": [
+          "Ingeteam Fast-Response PCS",
+          "SMA"
+        ],
+        "ems": [
+          "Multi-chemistry EMS"
+        ],
+        "transformer": "0.69 / 10(35) кВ"
+      },
+      "provenance": {
+        "sourceUrl": "https://www.catl.com/en/ess/",
+        "verifiedAt": "2026-09-15T10:00:00Z",
+        "verifiedBy": "Senior BESS Systems Engineer",
+        "confidence": "OFFICIAL_CATL",
+        "revision": 1,
+        "lastUpdated": "2026-10-01T08:00:00Z"
+      }
+    },
+    {
+      "id": "catl-tener-stack",
+      "name": "CATL TENER Stack",
+      "family": "TENER Series",
+      "category": "Utility Scale",
+      "shortDesc": "Модульна блокова вертикальна система накопичення енергії підвищеної компонувальної гнучкості.",
+      "highlight": "До 9 МВт·год, пошарове нарощування, швидкий шеф-монтаж",
+      "status": "AVAILABLE",
+      "type": "stack",
+      "energySpecs": {
+        "nominalCapacity": "До 9.0 МВт·год",
+        "usableCapacity": "8.8 МВт·год",
+        "nominalVoltage": "1500 V DC",
+        "voltageRange": "1200 ~ 1700 V DC",
+        "cRate": "0.5C / 1C",
+        "efficiencyRoundTrip": "≥ 95.2%"
+      },
+      "cellSpecs": {
+        "chemistry": "LFP (LiFePO4)",
+        "cellModel": "CATL 314 Ah / 575 Ah",
+        "cellCapacity": "314 / 575 Ah",
+        "cycleLife": "12 000 циклів",
+        "degradationFirstYears": "< 1.2% на рік"
+      },
+      "mechanicalSpecs": {
+        "dimensions": "Модульні шафи N × (1300 × 1400 × 2400 мм)",
+        "weight": "До 46 000 кг (комплект 9 МВт·год)",
+        "containerStandard": "Модульний масив / CTP",
+        "protectionRating": "IP55 / C4-C5"
+      },
+      "thermalSpecs": {
+        "coolingMethod": "Рідинне охолодження стійок (Rack-level)",
+        "tempControlAccuracy": "ΔT ≤ 2.8°C",
+        "operatingTempRange": "-30°C ... +55°C"
+      },
+      "safetySpecs": {
+        "fireSuppression": "Пошаровий аерозольний та газовий захист шаф",
+        "deflagrationProtection": "Вибухозахисні клапани скидання тиску",
+        "gasDetection": "Локальні газоаналізатори на кожній стійці",
+        "certifications": [
+          "NFPA 855",
+          "UL 9540A",
+          "IEC 62619",
+          "CE"
+        ]
+      },
+      "compatibility": {
+        "pcs": [
+          "SMA",
+          "Ingeteam",
+          "Sungrow"
+        ],
+        "ems": [
+          "CATL Native AI EMS",
+          "SCADA"
+        ],
+        "transformer": "10/35 кВ"
+      },
+      "provenance": {
+        "sourceUrl": "https://www.catl.com/en/ess/",
+        "verifiedAt": "2026-09-15T10:00:00Z",
+        "verifiedBy": "Senior BESS Systems Engineer",
+        "confidence": "OFFICIAL_CATL",
+        "revision": 1,
+        "lastUpdated": "2026-10-01T08:00:00Z"
+      }
+    }
+  ],
+  "rfqs": [
+    {
+      "id": "RFQ-UA-2026-1001",
+      "companyName": "ТОВ «Агро-Енергія Захід»",
+      "contactPerson": "Олег Василенко (Технічний директор)",
+      "phone": "+380 (67) 420-11-22",
+      "email": "o.vasylenko@agro-energy.ua",
+      "location": "Львівська обл., м. Стрий",
+      "powerKw": 1500,
+      "capacityKwh": 3000,
+      "selectedSeries": "CATL TENER S (6.25 МВт·год)",
+      "useCase": "Peak Shaving (Зрізання піків споживання)",
+      "details": "Приєднання до РУ-10 кВ елеватора, власна СЕС 2.2 МВт.",
+      "status": "QUALIFICATION",
+      "utmSource": "google_search",
+      "utmCampaign": "bess_ukraine_autumn_2026",
+      "createdAt": "2026-10-01T07:15:00Z",
+      "updatedAt": "2026-10-01T08:30:00Z",
+      "notes": [
+        "Клієнт передав погодинний графік навантаження. Інженер готує попередню схему."
+      ]
+    },
+    {
+      "companyName": "ТОВ Нова Енергія",
+      "contactPerson": "Сергій К.",
+      "phone": "+380501234567",
+      "email": "info@nova-energy.ua",
+      "powerKw": 1500,
+      "capacityKwh": 3000,
+      "selectedSeries": "CATL TENER S",
+      "useCase": "Peak Shaving",
+      "id": "RFQ-UA-589116",
+      "status": "NEW",
+      "createdAt": "2026-10-01T16:36:29.116Z",
+      "updatedAt": "2026-10-01T16:36:29.116Z"
+    }
+  ],
+  "syncSources": [
+    {
+      "id": "src-catl-tener",
+      "name": "CATL TENER Utility ESS Official Portal",
+      "url": "https://www.catl.com/en/ess/tener/",
+      "sourceType": "OFFICIAL_WEB",
+      "pollIntervalMinutes": 360,
+      "lastChecked": "2026-10-01T16:36:16.714Z",
+      "lastHash": "sha256-a83f98c211e4",
+      "enabled": true
+    },
+    {
+      "id": "src-catl-enerone",
+      "name": "CATL EnerOne Plus Product Datasheet (PDF)",
+      "url": "https://www.catl.com/en/uploads/datasheet-enerone-plus-2026.pdf",
+      "sourceType": "DATASHEET_PDF",
+      "pollIntervalMinutes": 720,
+      "lastChecked": "2026-10-01T16:36:16.714Z",
+      "lastHash": "sha256-42fbc9e71881",
+      "enabled": true
+    }
+  ],
+  "syncChanges": [],
+  "auditLogs": [
+    {
+      "id": "LOG-1790872589116-ubhl",
+      "action": "RFQ_CREATED",
+      "entity": "RFQ",
+      "entityId": "RFQ-UA-589116",
+      "actor": "Сергій К.",
+      "timestamp": "2026-10-01T16:36:29.116Z",
+      "details": {
+        "company": "ТОВ Нова Енергія",
+        "series": "CATL TENER S"
+      }
+    }
+  ]
+}

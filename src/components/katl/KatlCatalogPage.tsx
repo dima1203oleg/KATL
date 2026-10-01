@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Check,
@@ -13,6 +13,7 @@ import {
   Grid,
   List,
   Sparkles,
+  Database,
 } from 'lucide-react';
 import { KatlPage } from './KatlNavbar';
 import { CatlContainerGraphic } from './KatlVisualAssets';
@@ -35,6 +36,20 @@ export const KatlCatalogPage: React.FC<KatlCatalogPageProps> = ({
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [localCompare, setLocalCompare] = useState<string[]>(['catl-tener-h', 'catl-tener-s']);
+  const [isPimSynced, setIsPimSynced] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetch('/api/v1/products')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.data && Array.isArray(data.data)) {
+          setIsPimSynced(true);
+        }
+      })
+      .catch(() => {
+        setIsPimSynced(false);
+      });
+  }, []);
 
   const selectedForCompare = compareProductIds || localCompare;
 

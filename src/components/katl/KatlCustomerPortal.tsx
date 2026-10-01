@@ -26,8 +26,32 @@ export const KatlCustomerPortal: React.FC<KatlCustomerPortalProps> = ({
   onOpenRfq,
 }) => {
   const [activeTab, setActiveTab] = useState<'calculations' | 'proposals' | 'timeline'>('calculations');
+  const [projectsList, setProjectsList] = useState<any[]>([]);
 
-  const savedCalculations = [
+  React.useEffect(() => {
+    fetch('/api/v1/customer/projects')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data && Array.isArray(d.data) && d.data.length > 0) {
+          setProjectsList(
+            d.data.map((item: any) => ({
+              id: item.id,
+              name: item.projectName,
+              date: item.createdAt.split('T')[0],
+              powerKw: item.powerKw,
+              capacityKwh: item.capacityKwh,
+              product: item.productSlug.includes('tener') ? 'CATL TENER H (9.008 МВт·год)' : 'CATL EnerOne Plus',
+              savings: '-44%',
+              payback: '3.2 р.',
+              version: 'V1.4',
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const defaultCalculations = [
     {
       id: 'CALC-2026-08',
       name: 'Основний виробничий цех (Peak Shaving)',
@@ -50,18 +74,9 @@ export const KatlCustomerPortal: React.FC<KatlCustomerPortalProps> = ({
       payback: '3.1 р.',
       version: 'V1.1',
     },
-    {
-      id: 'CALC-2026-02',
-      name: 'Резервне живлення серверної та лабораторії',
-      date: '2026-08-30',
-      powerKw: 350,
-      capacityKwh: 745,
-      product: 'CATL EnerOne Plus (2 шафи)',
-      savings: '-31%',
-      payback: '4.2 р.',
-      version: 'V1.0',
-    },
   ];
+
+  const savedCalculations = projectsList.length > 0 ? projectsList : defaultCalculations;
 
   const proposalsHistory = [
     {

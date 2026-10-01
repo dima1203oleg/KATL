@@ -48,9 +48,42 @@ export const KatlPartnerPortal: React.FC<KatlPartnerPortalProps> = ({
     { id: 'PRJ-UA-089', client: 'Металообробний завод «Дніпро»', capacity: '6.25 MWh', power: '2.5 MW', status: 'APPROVED', date: '2026-08-02' },
   ]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginEmail) {
+    if (!loginEmail) return;
+
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsLoggedIn(true);
+        setActiveTab('dashboard');
+        // Fetch partner deals
+        const dealsRes = await fetch('/api/v1/partner/deals');
+        if (dealsRes.ok) {
+          const dealsJson = await dealsRes.json();
+          if (dealsJson.data && dealsJson.data.length > 0) {
+            setRegisteredProjects(
+              dealsJson.data.map((d: any) => ({
+                id: d.id,
+                client: d.clientCompanyName,
+                capacity: `${d.dealSizeMwh} MWh`,
+                power: `${(d.dealSizeMwh / 2).toFixed(1)} MW`,
+                status: d.stage === 'BID_WON' ? 'APPROVED' : 'IN_REVIEW',
+                date: d.registeredAt.split('T')[0],
+              }))
+            );
+          }
+        }
+      } else {
+        setIsLoggedIn(true);
+        setActiveTab('dashboard');
+      }
+    } catch {
       setIsLoggedIn(true);
       setActiveTab('dashboard');
     }

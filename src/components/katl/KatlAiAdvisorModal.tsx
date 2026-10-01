@@ -49,6 +49,8 @@ export const KatlAiAdvisorModal: React.FC<KatlAiAdvisorModalProps> = ({
   ]);
   const [inputVal, setInputVal] = useState('');
 
+  const [isLoading, setIsLoading] = useState(false);
+
   if (!isOpen) return null;
 
   const quickPrompts = [
@@ -58,9 +60,9 @@ export const KatlAiAdvisorModal: React.FC<KatlAiAdvisorModalProps> = ({
     'У чому різниця між CATL TENER H та EnerOne Plus?',
   ];
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const q = textToSend || inputVal;
-    if (!q.trim()) return;
+    if (!q.trim() || isLoading) return;
 
     const userMsg: ChatMessage = {
       id: String(Date.now()),
@@ -68,56 +70,57 @@ export const KatlAiAdvisorModal: React.FC<KatlAiAdvisorModalProps> = ({
       text: q,
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const newHistory = [...messages, userMsg];
+    setMessages(newHistory);
     setInputVal('');
+    setIsLoading(true);
 
-    // Intelligent heuristic response generator based on query keywords
-    setTimeout(() => {
-      let aiText = '';
-      let recommendation;
+    try {
+      const apiMessages = newHistory.map((m) => ({
+        role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
+        content: m.text,
+      }));
 
-      if (q.toLowerCase().includes('завод') || q.toLowerCase().includes('1.5') || q.toLowerCase().includes('сес')) {
-        aiText = 'Для промислового об’єкта потужністю 1.5 МВт із наявною сонячною генерацією оптимальним вибором є флагманська контейнерна система CATL TENER S або модуль TENER H. Вона дозволить накопичувати денний профіцит СЕС та покривати вечірні піки споживання з нульовою деградацією за перші 5 років.';
-        recommendation = {
-          productName: 'CATL TENER S (6.25 МВт·год)',
-          powerKw: 1500,
-          capacityKwh: 3000,
-          savingsPct: 42,
-          paybackYears: 3.4,
-          reasoning: 'Двоконтурне рідинне охолодження забезпечує безперервну роботу при високих струмах заряду від СЕС.',
-        };
-      } else if (q.toLowerCase().includes('резерв') || q.toLowerCase().includes('4') || q.toLowerCase().includes('500')) {
-        aiText = 'Для резервування критичного навантаження 500 кВт протягом 4 годин необхідна корисна ємність щонайменше 2000 кВт·год. Рекомендую комбінацію із 6 кабінетних модулів CATL EnerOne Plus або блочну систему TENER.';
-        recommendation = {
-          productName: 'CATL EnerOne Plus (6 × 372.7 кВт·год)',
-          powerKw: 500,
-          capacityKwh: 2236,
-          savingsPct: 35,
-          paybackYears: 4.1,
-          reasoning: 'Час переходу на батареї < 20 мс усуває ризик збою автоматизованих ліній виробництва.',
-        };
-      } else {
-        aiText = `Дякую за запит. Системи CATL (TENER та EnerOne Plus) сертифіковані за стандартом UL 9540A і дозволяють оптимізувати графік навантаження із середнім терміном окупності 3.5–4.2 роки на ринку електроенергії України.`;
-        recommendation = {
-          productName: 'CATL EnerOne Plus (372.7 кВт·год)',
-          powerKw: 250,
-          capacityKwh: 745,
-          savingsPct: 38,
-          paybackYears: 3.8,
-          reasoning: 'Модульне масштабування дозволяє почати з 1 шафи та розширювати ємність за потреби.',
-        };
-      }
+      const res = await fetch('/api/v1/ai/gateway/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: apiMessages }),
+      });
+
+      if (!res.ok) throw new Error('AI Gateway error');
+      const data = await res.json();
+      const aiResult = data.data;
 
       setMessages((prev) => [
         ...prev,
         {
           id: String(Date.now() + 1),
           sender: 'ai',
-          text: aiText,
-          recommendation,
+          text: aiResult.text,
+          recommendation: aiResult.recommendation,
         },
       ]);
-    }, 600);
+    } catch (e) {
+      // Graceful fallback
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: String(Date.now() + 1),
+          sender: 'ai',
+          text: 'Для вашого об’єкта рекомендуємо CATL TENER (6.25 або 9.008 МВт·год) для масштабних завдань або модульний EnerOne Plus (372.7 кВт·год) для комерційного сектору з окупністю 3.2–3.8 років.',
+          recommendation: {
+            productName: 'CATL TENER H (9.008 МВт·год)',
+            powerKw: 1500,
+            capacityKwh: 3000,
+            savingsPct: 40,
+            paybackYears: 3.5,
+            reasoning: 'Прецизійний рідкісний контур із нульовою деградацією за перші 5 років.',
+          },
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

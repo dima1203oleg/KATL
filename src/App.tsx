@@ -27,14 +27,23 @@ import { BessProposalModal } from './components/BessProposalModal';
 import { EngineerReviewWorkspaceModal } from './components/EngineerReviewWorkspaceModal';
 import { SeoCommandCenterModal } from './components/SeoCommandCenterModal';
 import { Toast } from './components/Toast';
+import { useAppRouter } from './router/useAppRouter';
+import { computeSeoMetadata, applySeoToDocument } from './lib/seoManager';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<KatlPage>('home');
-  const [selectedProductId, setSelectedProductId] = useState<string>('catl-tener-h');
-  const [compareProductIds, setCompareProductIds] = useState<string[]>(['catl-tener-h', 'catl-tener-s']);
+  const { route, navigateTo } = useAppRouter();
+  const currentPage = route.page;
+  const selectedProductId = route.productId;
+  const compareProductIds = route.compareProductIds;
+
+  // Dynamic SEO metadata updates on route transition
+  React.useEffect(() => {
+    const seo = computeSeoMetadata(route);
+    applySeoToDocument(seo);
+  }, [route]);
 
   // Modals state
-  const [isRfqOpen, setIsRfqOpen] = useState(false);
+  const [isRfqOpen, setIsRfqOpen] = useState(route.isRfqRoute);
   const [isVideoOpen, setIsVideoOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAiAdvisorOpen, setIsAiAdvisorOpen] = useState(false);
@@ -75,18 +84,18 @@ export default function App() {
   };
 
   const handleNavigate = (page: KatlPage) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateTo({ page });
+  };
+
+  const handleSelectProduct = (productId: string) => {
+    navigateTo({ page: 'product', productId });
   };
 
   const handleToggleCompare = (id: string) => {
-    setCompareProductIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.length > 1 ? prev.filter((p) => p !== id) : prev;
-      } else {
-        return prev.length < 4 ? [...prev, id] : prev;
-      }
-    });
+    const updated = compareProductIds.includes(id)
+      ? compareProductIds.length > 1 ? compareProductIds.filter((p) => p !== id) : compareProductIds
+      : compareProductIds.length < 4 ? [...compareProductIds, id] : compareProductIds;
+    navigateTo({ page: 'compare', compareProductIds: updated });
   };
 
   const handleOpenRfq = (note?: string) => {
@@ -103,12 +112,6 @@ export default function App() {
     }
     setIsRfqOpen(true);
     showToast('Форму комерційного запиту відкрито');
-  };
-
-  const handleSelectProduct = (productId: string) => {
-    setSelectedProductId(productId);
-    setCurrentPage('product');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleOpenBom = () => {
