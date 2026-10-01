@@ -1,0 +1,6 @@
+{
+  "name": "CATL BESS Ukraine — Промислові накопичувачі енергії",
+  "description": "Офіційна інженерна платформа промислових систем накопичення енергії (BESS / ESS) CATL в Україні: CATL TENER, EnerOne, конфігуратор потужності та розрахунок ROI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

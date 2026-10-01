@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Unbounded', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.font-display {
+  font-family: 'Unbounded', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Light Mode Overrides */
+.theme-light {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+.theme-light header {
+  background-color: rgba(248, 250, 252, 0.92);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+.theme-light header a,
+.theme-light header nav button {
+  color: #1e293b;
+}
+.theme-light header nav button:hover {
+  color: #d97706;
+}
+.theme-light section {
+  border-color: rgba(15, 23, 42, 0.06);
+}
+.theme-light #estimator {
+  background-color: #f1f5f9;
+}
+.theme-light footer {
+  background-color: #e2e8f0;
+  border-color: rgba(15, 23, 42, 0.08);
+  color: #334155;
+}
+.theme-light footer .text-white {
+  color: #0f172a;
+}
+.theme-light .bg-\[\#13151f\],
+.theme-light .bg-\[\#12141d\],
+.theme-light .bg-\[\#151722\] {
+  background-color: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  color: #1e293b;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+}
+.theme-light .text-white {
+  color: #0f172a;
+}
+.theme-light .text-neutral-300,
+.theme-light .text-neutral-200 {
+  color: #334155;
+}
+.theme-light .text-neutral-400 {
+  color: #64748b;
+}
+.theme-light .bg-black\/40,
+.theme-light .bg-black\/30,
+.theme-light .bg-black\/20 {
+  background-color: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.06);
+}
+.theme-light input,
+.theme-light textarea,
+.theme-light select {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+/* Custom scrollbar - Cross-browser Firefox & WebKit */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #252836 #0c0d12;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #080a10;
+}
+::-webkit-scrollbar-thumb {
+  background: #252a3d;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4363;
+}
+
+/* Momentum scrolling for all scroll containers on iOS / iPadOS Safari */
+.overflow-x-auto,
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Touch targets and mobile form focus accessibility */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
+  }
+}
+
+/* Hardware accelerated SVGs and transforms */
+svg {
+  shape-rendering: geometricPrecision;
+}
+
+/* Support for notch safe areas */
+header {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+footer {
+  padding-bottom: max(3rem, env(safe-area-inset-bottom));
+}
