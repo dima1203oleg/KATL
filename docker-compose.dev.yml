@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: katl_dev
+      POSTGRES_USER: katl_dev_user
+      POSTGRES_PASSWORD: katl_dev_password
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  api:
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://katl_dev_user:katl_dev_password@postgres:5432/katl_dev
+      REDIS_URL: redis://redis:6379
+
+  worker:
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://katl_dev_user:katl_dev_password@postgres:5432/katl_dev
+      REDIS_URL: redis://redis:6379
+
+  web:
+    environment:
+      NODE_ENV: development
+      PORT: 3000

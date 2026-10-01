@@ -9,16 +9,16 @@ services:
     container_name: katl-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: katl_production
-      POSTGRES_USER: katl_user
-      POSTGRES_PASSWORD: katl_secure_password_2026
+      POSTGRES_DB: ${POSTGRES_DB:-katl_production}
+      POSTGRES_USER: ${POSTGRES_USER:-katl_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-katl_secure_password_dev}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./packages/database/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U katl_user -d katl_production"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-katl_user} -d ${POSTGRES_DB:-katl_production}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -51,10 +51,11 @@ services:
     container_name: katl-api
     restart: unless-stopped
     environment:
-      PORT: 4000
-      NODE_ENV: development
-      DATABASE_URL: postgresql://katl_user:katl_secure_password_2026@postgres:5432/katl_production
-      REDIS_URL: redis://redis:6379
+      PORT: ${API_PORT:-4000}
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://katl_user:katl_secure_password_dev@postgres:5432/katl_production}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      SESSION_SECRET: ${SESSION_SECRET:-change_in_production_secret_key_32bytes}
     ports:
       - "4000:4000"
     depends_on:
@@ -73,9 +74,9 @@ services:
     container_name: katl-worker
     restart: unless-stopped
     environment:
-      NODE_ENV: development
-      DATABASE_URL: postgresql://katl_user:katl_secure_password_2026@postgres:5432/katl_production
-      REDIS_URL: redis://redis:6379
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://katl_user:katl_secure_password_dev@postgres:5432/katl_production}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,7 +84,7 @@ services:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
-  # 5. Next.js App Router Web Frontend (@katl/web)
+  # 5. Web Frontend (@katl/web)
   # ---------------------------------------------------------------------------
   web:
     build:
@@ -92,10 +93,10 @@ services:
     container_name: katl-web
     restart: unless-stopped
     environment:
-      PORT: 3000
-      NODE_ENV: development
-      DATABASE_URL: postgresql://katl_user:katl_secure_password_2026@postgres:5432/katl_production
-      REDIS_URL: redis://redis:6379
+      PORT: ${WEB_PORT:-3000}
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://katl_user:katl_secure_password_dev@postgres:5432/katl_production}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     ports:
       - "3000:3000"
     depends_on:

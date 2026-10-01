@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  postgres:
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: [] # Not exposed directly to public network in production
+
+  redis:
+    restart: always
+    ports: [] # Internal network only
+
+  api:
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      SESSION_SECRET: ${SESSION_SECRET}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+
+  worker:
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+
+  web:
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_URL: ${API_URL:-http://api:4000}

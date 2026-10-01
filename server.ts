@@ -10,6 +10,7 @@ import { db } from './src/server/db/database';
 import { aiGateway } from './src/server/ai-gateway/aiGateway';
 import { calculationService } from './src/server/calculations/calculationService';
 import { syncEngine } from './src/server/sync/syncEngine';
+import { worker } from './apps/worker/src/index';
 
 const app = express();
 const PORT = 3000;
@@ -17,9 +18,42 @@ const isProd = process.env.NODE_ENV === 'production';
 
 app.use(express.json());
 
+// Security & Observability Headers Middleware
+app.use((req: Request, res: Response, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  const reqId = `req-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 6)}`;
+  res.setHeader('X-Request-Id', reqId);
+  (req as any).requestId = reqId;
+  next();
+});
+
 // -------------------------------------------------------------
 // 1. System Health & Observability Endpoints
 // -------------------------------------------------------------
+app.get(['/health/live', '/api/v1/health/live'], (req: Request, res: Response) => {
+  res.json({
+    status: 'LIVE',
+    uptimeSeconds: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get(['/health/ready', '/api/v1/health/ready'], (req: Request, res: Response) => {
+  const pCount = db.getAllProducts().length;
+  const dbReady = pCount > 0;
+  if (!dbReady) {
+    return res.status(503).json({ status: 'NOT_READY', reason: 'PIM database not bootstrapped' });
+  }
+  res.json({
+    status: 'READY',
+    database: 'CONNECTED',
+    productsInPim: pCount,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.get(['/health', '/api/v1/health'], (req: Request, res: Response) => {
   const pCount = db.getAllProducts().length;
   const rfqCount = db.getAllRfqs().length;
@@ -316,6 +350,10 @@ app.get('/api/v1/sync/changes', (req: Request, res: Response) => {
   res.json({ data: db.getSyncChanges() });
 });
 
+app.get('/api/v1/sync/snapshots', (req: Request, res: Response) => {
+  res.json({ data: syncEngine.getSnapshots() });
+});
+
 app.post('/api/v1/sync/run', async (req: Request, res: Response) => {
   const result = await syncEngine.runSync();
   res.json({
@@ -396,6 +434,19 @@ app.get('/api/v1/ai/gateway/stats', (req: Request, res: Response) => {
   res.json({ data: aiGateway.getStats() });
 });
 
+app.get('/api/v1/ai/gateway/providers', (req: Request, res: Response) => {
+  res.json({ data: aiGateway.getProviderRegistry() });
+});
+
+app.post('/api/v1/ai/gateway/reload', (req: Request, res: Response) => {
+  const result = aiGateway.reloadKeysAndProviders();
+  res.json({
+    success: true,
+    message: 'Всі конфігурації та API ключі провайдерів успішно перевірено та оновлено.',
+    data: result,
+  });
+});
+
 // -------------------------------------------------------------
 // 6.1. Localization Platform API
 // -------------------------------------------------------------
@@ -418,6 +469,26 @@ app.get('/api/v1/localization/glossary', (req: Request, res: Response) => {
       { key: 'rte', uk: 'ККД повного циклу (RTE)', en: 'Round Trip Efficiency (RTE)', zhCn: '系统往返效率' },
       { key: 'grid_forming', uk: 'Режим формування мережі (Grid-Forming)', en: 'Grid-Forming Control', zhCn: '构网型控制' },
     ],
+  });
+});
+
+// -------------------------------------------------------------
+// 6.2. Background Jobs & Worker API
+// -------------------------------------------------------------
+app.get('/api/v1/jobs', (req: Request, res: Response) => {
+  res.json({
+    data: worker.getQueueStats(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.post('/api/v1/jobs/trigger', (req: Request, res: Response) => {
+  const { type = 'CATL_SYNC_JOB', payload = {} } = req.body;
+  const job = worker.enqueueJob(type, payload);
+  res.json({
+    success: true,
+    message: `Завдання ${job.id} успішно додано до черги обробника.`,
+    job,
   });
 });
 

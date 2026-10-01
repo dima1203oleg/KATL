@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+.katl_db.json
+*.db
+runtime-data/
+uploads/private/
+.turbo/
+.next/
+fixtures/runtime/
+
