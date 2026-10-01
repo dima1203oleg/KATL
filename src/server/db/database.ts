@@ -402,6 +402,11 @@ class KatlDatabase {
     return Array.from(this.users.values());
   }
 
+  public getUserByEmail(email: string): UserRecord | null {
+    const cleanEmail = email.toLowerCase().trim();
+    return Array.from(this.users.values()).find((u) => u.email.toLowerCase() === cleanEmail) || null;
+  }
+
   public updateUserRole(userId: string, newRole: UserRole, actor: string): UserRecord | null {
     const user = this.users.get(userId);
     if (!user) return null;
@@ -514,12 +519,12 @@ class KatlDatabase {
     );
   }
 
-  public updateRfqStatus(id: string, status: RfqRecord['status'], actor: string): RfqRecord | null {
+  public updateRfqStatus(id: string, status: RfqRecord['status'], actor: string, note?: string): RfqRecord | null {
     const rfq = this.rfqs.get(id);
     if (!rfq) return null;
     rfq.status = status;
     rfq.updatedAt = new Date().toISOString();
-    this.logAudit('RFQ_STATUS_CHANGE', 'RFQ', id, actor, { newStatus: status });
+    this.logAudit('RFQ_STATUS_CHANGE', 'RFQ', id, actor, { newStatus: status, note });
     this.persist();
     return rfq;
   }
