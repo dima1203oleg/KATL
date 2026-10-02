@@ -4,9 +4,15 @@ import { notFound } from 'next/navigation';
 import { ArrowRight, BatteryCharging, CircleHelp, Gauge, Network, ShieldCheck, Zap } from 'lucide-react';
 import { LocalizedUnavailable } from '../../../components/LocalizedUnavailable';
 
-export const metadata:Metadata={title:'BESS — системи накопичення енергії',description:'Що таке BESS: компоненти, потужність і ємність, сценарії застосування та питання для інженерного підбору.'};
+export async function generateMetadata({params}:{params:Promise<{locale:string}>}):Promise<Metadata>{
+ const {locale}=await params;
+ if(locale==='uk-UA')return {title:'BESS — системи накопичення енергії',description:'Що таке BESS: компоненти, потужність і ємність, сценарії застосування та питання для інженерного підбору.',alternates:{canonical:'/uk-UA/bess',languages:{'uk-UA':'/uk-UA/bess'} }};
+ if(locale==='en')return {title:'BESS — reviewed English content unavailable',description:'This page is not yet available in a reviewed English version.',robots:{index:false,follow:true}};
+ if(locale==='zh-CN')return {title:'BESS — 中文内容正在审核',description:'此页面尚无经过审核的中文版本。',robots:{index:false,follow:true}};
+ return {title:'BESS',robots:{index:false,follow:false}};
+}
 export default async function BessHub({params}:{params:Promise<{locale:string}>}){
- const {locale}=await params;if(locale!=='uk-UA')notFound();if(locale!=='uk-UA')return <LocalizedUnavailable locale={locale}/>;
+ const {locale}=await params;if(!['uk-UA','en','zh-CN'].includes(locale))notFound();if(locale!=='uk-UA')return <LocalizedUnavailable locale={locale}/>;
  return <main><section className="page-hero"><div className="container"><div className="breadcrumbs"><Link href={`/${locale}`}>Головна</Link>　/　База знань　/　BESS</div><div className="eyebrow">ОСНОВИ НАКОПИЧЕННЯ ЕНЕРГІЇ</div><h1>BESS — системи накопичення енергії</h1><p><strong>BESS</strong> (Battery Energy Storage System) — система, що зберігає електричну енергію в акумуляторних батареях і віддає її пізніше відповідно до режиму керування, обмежень обладнання та вимог електричної мережі.</p><div className="hero-actions"><Link className="button" href={`/${locale}/engineering/bess-calculator`}>Оцінити параметри <ArrowRight size={15}/></Link><Link className="button button-secondary" href={`/${locale}/rfq`}>Обговорити проєкт</Link></div></div></section>
  <section className="content-section"><div className="container" style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 250px',gap:55}}><article className="prose"><h2 id="how">Як працює BESS</h2><p>Під час заряджання перетворювач приймає електроенергію від мережі або генерації та передає її батарейним модулям. Під час розряджання енергія проходить зворотний шлях через силову електроніку до навантаження або точки приєднання. Фактична схема залежить від обладнання, захистів, режиму мережі та проєктних вимог.</p>
  <h2 id="components">Основні компоненти</h2><ul><li><strong>Акумуляторна система</strong> — комірки, модулі, стійки або шафи.</li><li><strong>PCS</strong> — двонаправлений перетворювач потужності.</li><li><strong>BMS</strong> — моніторинг стану батареї та обмеження робочих режимів.</li><li><strong>EMS</strong> — керування енергетичними потоками на рівні системи.</li><li><strong>Тепловий режим і захист</strong> — інженерні підсистеми, що визначаються вимогами майданчика та документацією постачальників.</li><li><strong>Приєднання до мережі</strong> — трансформаторне обладнання, комутація, вимірювання й захисти за проєктом.</li></ul>
