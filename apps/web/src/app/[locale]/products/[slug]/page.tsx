@@ -1,57 +1,30 @@
-import React from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { pimRepository } from '../../../../lib/pim/pimRepository';
 import { TenerProductDetailView } from '../../../../components/TenerProductDetailView';
-import { KatlLocale } from '@katl/shared-types';
 
-interface LocaleProductPageProps {
-  params: Promise<{
-    locale: string;
-    slug: string;
-  }>;
+export const dynamic='force-dynamic';
+type Props={params:Promise<{locale:string;slug:string}>};
+
+export async function generateMetadata({params}:Props):Promise<Metadata>{
+ const {locale,slug}=await params;
+ try{
+  const product=await pimRepository.getProductBySlug(slug,locale);
+  if(!product)return {title:'Продукт не знайдено',robots:{index:false,follow:false}};
+  const languages:Record<string,string>={};
+  for(const candidate of ['uk-UA','en','zh-CN']){
+   try{if(await pimRepository.getProductBySlug(slug,candidate))languages[candidate]=`/${candidate}/products/${slug}`;}catch{}
+  }
+  return {title:product.name,description:product.shortDesc,alternates:{canonical:`/${locale}/products/${slug}`,...(Object.keys(languages).length?{languages}:{})}};
+ }
+ catch{return {title:'Каталог тимчасово недоступний',robots:{index:false,follow:false}};}
 }
 
-export async function generateMetadata({ params }: LocaleProductPageProps): Promise<Metadata> {
-  const { slug, locale } = await params;
-  const product = await pimRepository.getProductBySlug(slug, locale as KatlLocale);
-
-  if (!product) {
-    return {
-      title: 'Product Not Found — CATL BESS',
-    };
-  }
-
-  const title = `${product.name} — CATL BESS [${locale.toUpperCase()}]`;
-  const description = `${product.shortDesc} ${product.highlight}`;
-
-  return {
-    title,
-    description,
-    alternates: {
-      canonical: `/${locale}/products/${slug}`,
-      languages: {
-        uk: `/uk/products/${slug}`,
-        en: `/en/products/${slug}`,
-        'zh-CN': `/zh-cn/products/${slug}`,
-      },
-    },
-  };
-}
-
-export default async function LocaleProductDetailPage({ params }: LocaleProductPageProps) {
-  const { locale, slug } = await params;
-  const validLocales = ['uk', 'en', 'zh-cn'];
-
-  if (!validLocales.includes(locale.toLowerCase())) {
-    notFound();
-  }
-
-  const product = await pimRepository.getProductBySlug(slug, locale as KatlLocale);
-
-  if (!product) {
-    notFound();
-  }
-
-  return <TenerProductDetailView product={product} locale={locale} />;
+export default async function ProductDetailPage({params}:Props){
+ const {locale,slug}=await params;
+ if(!['uk-UA','en','zh-CN'].includes(locale))notFound();
+ let product;
+ try{product=await pimRepository.getProductBySlug(slug,locale);}catch{return <main className="container content-section"><div className="error-note">Каталог тимчасово недоступний. Спробуйте пізніше.</div></main>;}
+ if(!product)notFound();
+ return <TenerProductDetailView product={product} locale={locale}/>;
 }

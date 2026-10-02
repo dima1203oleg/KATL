@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+node_modules
+**/node_modules
+dist
+build
+coverage
+.next
+**/.next
+.katl_db.json
+*.log
+runtime-data
+uploads/private

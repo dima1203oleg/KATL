@@ -1,22 +1,18 @@
-version: '3.8'
-
 services:
   # ---------------------------------------------------------------------------
   # 1. PostgreSQL 16 Relational Database (PIM, RFQs, Audit Logs, Sync Tables)
   # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: katl-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-katl_production}
       POSTGRES_USER: ${POSTGRES_USER:-katl_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-katl_secure_password_dev}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./packages/database/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-katl_user} -d ${POSTGRES_DB:-katl_production}"]
       interval: 10s
@@ -28,11 +24,10 @@ services:
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
-    container_name: katl-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -42,13 +37,33 @@ services:
       retries: 5
 
   # ---------------------------------------------------------------------------
-  # 3. Backend REST API Service (@katl/api)
+  # 2. Apply PostgreSQL schema before the API accepts traffic
   # ---------------------------------------------------------------------------
-  api:
+  migrate:
+    image: katl-api:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: katl-api
+      secrets:
+        - proxy_ca
+    command: ["npm", "--workspace=@katl/api", "run", "migrate"]
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://katl_user:katl_secure_password_dev@postgres:5432/katl_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # 3. Backend REST API Service (@katl/api)
+  # ---------------------------------------------------------------------------
+  api:
+    image: katl-api:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      secrets:
+        - proxy_ca
     restart: unless-stopped
     environment:
       PORT: ${API_PORT:-4000}
@@ -63,21 +78,27 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   # ---------------------------------------------------------------------------
   # 4. Background Worker Service (@katl/worker)
   # ---------------------------------------------------------------------------
   worker:
+    image: katl-worker:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
-    container_name: katl-worker
+      secrets:
+        - proxy_ca
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL:-postgresql://katl_user:katl_secure_password_dev@postgres:5432/katl_production}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -87,23 +108,31 @@ services:
   # 5. Web Frontend (@katl/web)
   # ---------------------------------------------------------------------------
   web:
+    image: katl-web:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    container_name: katl-web
+      secrets:
+        - proxy_ca
     restart: unless-stopped
     environment:
       PORT: ${WEB_PORT:-3000}
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: ${DATABASE_URL:-postgresql://katl_user:katl_secure_password_dev@postgres:5432/katl_production}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      API_URL: ${API_URL:-http://api:4000}
     ports:
       - "3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
+
+secrets:
+  proxy_ca:
+    file: ${CODEX_PROXY_CERT:-/dev/null}

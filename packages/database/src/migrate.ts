@@ -19,11 +19,14 @@ export async function runMigrations() {
       );
     `);
 
-    const migrationsDir = path.resolve(__dirname, '../migrations');
-    if (!fs.existsSync(migrationsDir)) {
-      console.log('[Migration Framework] No migrations directory found at', migrationsDir);
-      await client.query('COMMIT');
-      return;
+    const workingDirectory = process.cwd();
+    const migrationsDir = [
+      path.join(workingDirectory, 'migrations'),
+      path.join(workingDirectory, 'packages', 'database', 'migrations'),
+      path.resolve(workingDirectory, '../../packages/database/migrations'),
+    ].find((candidate) => fs.existsSync(candidate));
+    if (!migrationsDir) {
+      throw new Error(`No migrations directory found from ${workingDirectory}`);
     }
 
     const files = fs
@@ -59,7 +62,7 @@ export async function runMigrations() {
   }
 }
 
-if (process.argv[1] && process.argv[1].endsWith('migrate.ts')) {
+if (process.argv[1] && ['migrate.ts', 'migrate.mjs'].includes(path.basename(process.argv[1]))) {
   runMigrations().catch((e) => {
     console.error(e);
     process.exit(1);

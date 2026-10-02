@@ -4,9 +4,10 @@ let poolInstance: Pool | null = null;
 
 export function getDatabasePool(config?: PoolConfig): Pool {
   if (!poolInstance) {
-    const connectionString =
-      process.env.DATABASE_URL ||
-      'postgresql://katl_user:katl_secure_password_2026@localhost:5432/katl_production';
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is required; refusing to use an implicit database credential.');
+    }
 
     poolInstance = new Pool(
       config || {

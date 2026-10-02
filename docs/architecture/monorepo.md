@@ -1,40 +1,33 @@
-# Monorepo Architecture & Workspace Layout
+# Monorepo architecture
 
-## 1. Directory Structure
+## Current canonical runtime
 
-```
-├── apps/
-│   ├── web/               # Next.js App Router (Client & Server Components, SSR)
-│   ├── api/               # Express / Node.js Production REST API (Modular Monolith)
-│   └── worker/            # Background Worker (BullMQ + Redis for sync, reports, emails)
-├── packages/
-│   ├── shared-types/      # TypeScript contracts (PIM, RFQ, Sync, AI Gateway, Calc)
-│   ├── database/          # PostgreSQL schema, DDL migrations, connection pool, seed data
-│   └── redis/             # Redis client wrapper, cache keys, queue definitions
-├── src/                   # Existing Vite/React prototype (preserved as UI/UX baseline)
-├── docs/                  # Architecture, ADRs, blueprints, and mock inventory
-├── docker-compose.yml     # Local orchestration: PostgreSQL, Redis, API, Worker, Web
-└── .github/workflows/     # CI pipelines (Lint, Typecheck, Test, Build)
-```
-
-## 2. Workspaces Configuration
-
-Managed via NPM Workspaces in root `package.json`:
-```json
-{
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
-}
+```text
+apps/
+  web/       Next.js public web application
+  api/       Express REST API
+  worker/    BullMQ background worker
+packages/
+  calculations/ deterministic BESS and LCOS calculations
+  database/     PostgreSQL client and migrations
+  redis/        Redis client and queue definitions
+  shared-types/ shared domain/API contracts
+src/server/ai-gateway/ server-side AI gateway implementation imported by API code
+src/             legacy Vite/React interface retained as a migration reference
+infrastructure/ docker, monitoring, reverse proxy and scripts
+tests/          unit and API/integration tests
 ```
 
-## 3. Dependency Graph & Isolation Rules
-- `packages/shared-types` has zero runtime dependencies.
-- `packages/database` depends only on `shared-types` and PostgreSQL driver (`pg`).
-- `packages/redis` depends only on `shared-types` and `ioredis`.
-- `apps/api` depends on `packages/database`, `packages/redis`, `packages/shared-types`.
-- `apps/worker` depends on `packages/database`, `packages/redis`, `packages/shared-types`.
-- `apps/web` depends on `packages/database`, `packages/shared-types`.
-- Neither `apps/web` nor business modules may directly import vendor AI SDKs; all AI interactions must route through the AI Gateway.
-- The existing Vite/React codebase in `/src` remains fully intact as the UX baseline during progressive migration.
+The Vite/React interface remains until the Next.js migration has demonstrated functional, visual, data, route/SEO, regression-test, and browser parity. Root `npm run dev` uses Next.js, while `npm run build` also runs the legacy bundle check. The root Express server and its JSON/in-memory store are removed; `apps/api` is canonical. API and worker development processes run separately.
+
+## Workspace boundaries
+
+- The web application reads business data through the API and does not own persistence.
+- The API owns validation, authorization, and business workflows.
+- PostgreSQL is the system of record; Redis/BullMQ is for queued work.
+- `packages/calculations` contains deterministic math and does not call an LLM.
+- Business code uses the AI gateway instead of calling provider SDKs directly.
+- Only published PIM records with verified provenance are public. Non-Ukrainian product data additionally requires a current published translation with full localized specifications.
+- The small `packages/*` interfaces are not evidence that their domains are complete; current maturity is recorded in the [master gap matrix](../MASTER_GAP_MATRIX.md).
+
+This describes the repository's current direction, not a claim that every listed capability is implemented. See the [page acceptance report](../implementation/PAGE_ACCEPTANCE_REPORT.md) for current pass/partial/fail status.

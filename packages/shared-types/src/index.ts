@@ -3,7 +3,7 @@
  * Core domain types and contracts for the KATL BESS Platform.
  */
 
-export type KatlLocale = 'uk' | 'en' | 'zh-cn';
+export type KatlLocale = 'uk-UA' | 'en' | 'zh-CN';
 
 // ==========================================
 // 1. PIM & Product Domain Types
@@ -56,7 +56,7 @@ export interface ProductProvenance {
   sourceUrl: string;
   verifiedAt: string;
   verifiedBy: string;
-  confidence: 'OFFICIAL_CATL' | 'DISTRIBUTOR_VERIFIED' | 'PRE_RELEASE';
+  confidence: 'OFFICIAL_CATL' | 'DISTRIBUTOR_VERIFIED' | 'PRE_RELEASE' | 'UNVERIFIED';
   revision: number;
   lastUpdated: string;
 }
@@ -65,10 +65,10 @@ export interface KatlProduct {
   id: string;
   name: string;
   family: string;
-  category: 'Utility Scale' | 'C&I Storage' | 'Telecom & Microgrid' | 'Residential';
+  category: string;
   shortDesc: string;
   highlight: string;
-  status: 'AVAILABLE' | 'PRE_ORDER' | 'DEVELOPMENT';
+  status: 'DRAFT' | 'REVIEW' | 'APPROVED' | 'PUBLISHED' | 'ARCHIVED';
   type: string;
   energySpecs: EnergySpecs;
   cellSpecs: CellSpecs;
@@ -144,26 +144,18 @@ export interface SizingInput {
 
 export interface SizingResult {
   algorithmVersion: string;
-  calculatedCapacityMwh: number;
-  recommendedPowerMw: number;
-  recommendedProduct: {
-    id: string;
-    name: string;
-    containerCount: number;
+  calculatedAt: string;
+  input: {
+    solarMw: number;
+    loadMw: number;
+    durationHours: number;
+    reservePct: number;
   };
-  economics: {
-    estimatedCapexUsd: number;
-    annualSavingsUah: number;
-    paybackYears: number;
-    irrPercent: number;
-    lcosCentPerKwh: number;
-  };
-  bom: Array<{
-    category: string;
-    item: string;
-    quantity: number;
-    unit: string;
-  }>;
+  requestedPowerMw: number;
+  requestedDeliverableEnergyMwh: number;
+  nominalEnergyWithReserveMwh: number;
+  assumptions: string[];
+  limitations: string[];
 }
 
 // ==========================================

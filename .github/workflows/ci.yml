@@ -10,6 +10,35 @@ jobs:
   validate:
     name: Lint, Typecheck, Test, and Build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: katl_test
+          POSTGRES_USER: katl_test
+          POSTGRES_PASSWORD: katl_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U katl_test -d katl_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://katl_test:katl_test_password@localhost:5432/katl_test
+      REDIS_URL: redis://localhost:6379
+      KATL_USER_EMAIL: codex-ci-admin@example.test
+      KATL_USER_NAME: CI Integration Admin
+      KATL_USER_PASSWORD: Test-Only-Password-2026
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -20,10 +49,40 @@ jobs:
           node-version: 20
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run Typecheck and Lint
         run: npm run lint
 
+      - name: Apply Database Migrations
+        run: npm run db:migrate
+
+      - name: Seed Integration Data
+        run: npm run db:seed
+
+      - name: Provision Ephemeral Test Administrator
+        run: npm run user:provision
+
+      - name: Run Unit and Integration Tests
+        run: npm test
+
       - name: Run Production Build
         run: npm run build
+
+      - name: Install Cross-Browser Test Engines
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run Browser Acceptance Tests
+        run: npm run test:e2e
+
+      - name: Build API Container
+        run: docker build -f apps/api/Dockerfile -t katl-api:ci .
+
+      - name: Build Worker Container
+        run: docker build -f apps/worker/Dockerfile -t katl-worker:ci .
+
+      - name: Build Web Container
+        run: docker build -f apps/web/Dockerfile -t katl-web:ci .
+
+      - name: Dependency Security Audit
+        run: npm audit --audit-level=high

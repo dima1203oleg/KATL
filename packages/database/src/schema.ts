@@ -11,6 +11,17 @@ export const TABLES = {
   SYNC_SNAPSHOTS: 'sync_snapshots',
   SYNC_CHANGES: 'sync_changes',
   AUDIT_LOGS: 'audit_logs',
+  SOURCE_DOCUMENTS: 'source_documents',
+  KNOWLEDGE_ENTITIES: 'knowledge_entities',
+  KNOWLEDGE_ENTITY_ALIASES: 'knowledge_entity_aliases',
+  KNOWLEDGE_ENTITY_RELATIONSHIPS: 'knowledge_entity_relationships',
+  ENTITY_FACTS: 'entity_facts',
+  SEO_PAGE_REGISTRY: 'seo_page_registry',
+  SEO_SEMANTIC_CLUSTERS: 'seo_semantic_clusters',
+  SEO_SEMANTIC_QUERIES: 'seo_semantic_queries',
+  SEO_QUERY_OBSERVATIONS: 'seo_query_observations',
+  SEO_PAGE_ENTITIES: 'seo_page_entities',
+  SEO_QUERY_EXCLUSIONS: 'seo_query_exclusions',
 } as const;
 
 export interface PimProductDbRow {

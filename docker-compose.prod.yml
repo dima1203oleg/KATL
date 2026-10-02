@@ -1,6 +1,9 @@
-version: '3.8'
-
 services:
+  migrate:
+    image: katl-api:${IMAGE_TAG:?IMAGE_TAG is required for production}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required for production}
+
   postgres:
     restart: always
     environment:
@@ -14,25 +17,41 @@ services:
     ports: [] # Internal network only
 
   api:
+    image: katl-api:${IMAGE_TAG:?IMAGE_TAG is required for production}
     restart: always
+    ports: [] # Keep the API private; the web tier talks to it over the Compose network.
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required for production}
       REDIS_URL: ${REDIS_URL}
-      SESSION_SECRET: ${SESSION_SECRET}
-      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required for production}
+      CRM_WEBHOOK_TOKEN: ${CRM_WEBHOOK_TOKEN:?CRM_WEBHOOK_TOKEN is required for production}
+      WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required for production}
 
   worker:
+    image: katl-worker:${IMAGE_TAG:?IMAGE_TAG is required for production}
     restart: always
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required for production}
       REDIS_URL: ${REDIS_URL}
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required for production}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      NOTIFICATION_EMAIL: ${NOTIFICATION_EMAIL:?NOTIFICATION_EMAIL is required for production}
+      CRM_WEBHOOK_URL: ${CRM_WEBHOOK_URL:-}
+      CRM_WEBHOOK_TOKEN: ${CRM_WEBHOOK_TOKEN:?CRM_WEBHOOK_TOKEN is required for production}
 
   web:
+    image: katl-web:${IMAGE_TAG:?IMAGE_TAG is required for production}
     restart: always
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000" # Serve through the host's TLS reverse proxy.
     environment:
       NODE_ENV: production
       PORT: 3000
       API_URL: ${API_URL:-http://api:4000}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required for production}

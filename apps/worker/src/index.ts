@@ -1,160 +1,283 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- * 
- * KATL Background Job Worker Service
- * Production worker managing background queue processing for:
- * - CATL Product Source Monitoring & Differential Analysis
- * - RFQ Notifications & CRM Webhooks
- * - Datasheet PDF Specification Extraction
- * - Translation Memory Updates
- * - Sitemap & SEO Rebuilding
- */
-
 import dotenv from 'dotenv';
-import { syncEngine } from '../../../src/server/sync/syncEngine';
-import { db } from '../../../src/server/db/database';
+import { createHash, randomUUID } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import nodemailer from 'nodemailer';
+import type { PoolClient } from 'pg';
+import { getDatabasePool, closeDatabasePool } from '../../../packages/database/src/client';
+import {
+  closePlatformQueues,
+  createPlatformWorker,
+  enqueuePlatformJob,
+  getPlatformQueue,
+  QUEUE_NAMES,
+  type PlatformQueueName,
+} from '../../../packages/queue/src/index';
 
 dotenv.config();
 
-export type JobType = 
-  | 'CATL_SYNC_JOB'
-  | 'RFQ_DISPATCH_JOB'
-  | 'DATASHEET_EXTRACTION_JOB'
-  | 'TRANSLATION_JOB'
-  | 'SEO_REBUILD_JOB';
+const queueByEvent: Record<string, PlatformQueueName> = {
+  CATL_SYNC_JOB: 'product-sync',
+  RFQ_DISPATCH_JOB: 'rfq-dispatch',
+  DATASHEET_EXTRACTION_JOB: 'document-processing',
+  TRANSLATION_JOB: 'translations',
+  SEO_REBUILD_JOB: 'seo',
+};
 
-export interface QueueJob<T = Record<string, any>> {
-  id: string;
-  type: JobType;
-  payload: T;
-  attempt: number;
-  maxAttempts: number;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  failedAt?: string;
-  error?: string;
+async function dispatchRfq(rfqId: string) {
+  const pool = getDatabasePool();
+  const { rows } = await pool.query(
+    'SELECT id, company_name, contact_person, phone, email, location, power_kw, capacity_kwh, duration_hours, selected_series, use_case, details FROM rfq_records WHERE id = $1',
+    [rfqId]
+  );
+  const rfq = rows[0];
+  if (!rfq) throw new Error(`RFQ_NOT_FOUND:${rfqId}`);
+
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const recipient = process.env.NOTIFICATION_EMAIL;
+  if (!host || !recipient) throw new Error('SMTP_NOT_CONFIGURED');
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: process.env.SMTP_SECURE === 'true' || port === 465,
+    ...(process.env.SMTP_USER ? { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS || '' } } : {}),
+  });
+
+  const fields = [
+    `Company: ${rfq.company_name}`,
+    `Contact: ${rfq.contact_person}`,
+    `Email: ${rfq.email}`,
+    `Phone: ${rfq.phone}`,
+    `Location: ${rfq.location || '—'}`,
+    `Power (kW): ${rfq.power_kw ?? '—'}`,
+    `Capacity (kWh): ${rfq.capacity_kwh ?? '—'}`,
+    `Duration (h): ${rfq.duration_hours ?? '—'}`,
+    `Product: ${rfq.selected_series}`,
+    `Use case: ${rfq.use_case}`,
+    `Description: ${rfq.details || '—'}`,
+    `RFQ ID: ${rfq.id}`,
+  ];
+  const delivery = await transporter.sendMail({
+    to: recipient,
+    replyTo: rfq.email,
+    subject: `New KATL RFQ ${rfq.id}`,
+    text: fields.join('\n'),
+    messageId: `<${createHash('sha256').update(rfq.id).digest('hex')}@katl.local>`,
+  });
+
+  if (!delivery.accepted?.length) throw new Error('SMTP_RECIPIENT_NOT_ACCEPTED');
+
+  const crmUrl = process.env.CRM_WEBHOOK_URL;
+  let crmStatus = 'PENDING';
+  if (crmUrl) {
+    const response = await fetch(crmUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(process.env.CRM_WEBHOOK_TOKEN ? { 'x-crm-token': process.env.CRM_WEBHOOK_TOKEN } : {}),
+      },
+      body: JSON.stringify({ event: 'rfq.created', rfq }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`CRM_WEBHOOK_HTTP_${response.status}`);
+    crmStatus = 'SYNCED';
+  }
+
+  await pool.query(
+    `UPDATE rfq_records SET crm_sync_status = $1, updated_at = NOW() WHERE id = $2`,
+    [crmStatus, rfq.id]
+  );
+  await pool.query(
+    `INSERT INTO audit_logs (id, action, entity, entity_id, actor, details)
+     VALUES ($1, 'RFQ_NOTIFICATION_DELIVERED', 'RFQ', $2, 'Worker', jsonb_build_object('messageId', $3::text, 'crmStatus', $4::text))`,
+    [`AUD-${randomUUID()}`, rfq.id, delivery.messageId || null, crmStatus]
+  );
 }
 
-class KatlBackgroundWorker {
-  private isRunning: boolean = false;
-  private jobQueue: QueueJob<any>[] = [];
-  private pollIntervalMs: number = 15000;
-  private timer: NodeJS.Timeout | null = null;
-
-  constructor() {
-    this.bootstrapQueues();
-  }
-
-  private bootstrapQueues() {
-    console.log('[@katl/worker] Initializing KATL Background Task Worker with Real Job Handlers...');
-    console.log('[@katl/worker] Active Job Handlers:');
-    console.log('  • CATL_SYNC_JOB (Real HTTP Fetch & Diff Analyzer)');
-    console.log('  • RFQ_DISPATCH_JOB (CRM Webhooks & Notifications)');
-    console.log('  • SEO_REBUILD_JOB (Sitemap & Schema Regeneration)');
-    console.log('  • TRANSLATION_JOB (Translation Memory Sync)');
-  }
-
-  public enqueueJob<T>(type: JobType, payload: T, maxAttempts: number = 3): QueueJob<T> {
-    const job: QueueJob<T> = {
-      id: `JOB-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      type,
-      payload,
-      attempt: 0,
-      maxAttempts,
-      createdAt: new Date().toISOString(),
-    };
-    this.jobQueue.push(job);
-    console.log(`[@katl/worker] Enqueued job ${job.id} of type [${job.type}]`);
-    return job;
-  }
-
-  public async start() {
-    if (this.isRunning) return;
-    this.isRunning = true;
-    console.log('[@katl/worker] Worker loop started. Processing background queues...');
-
-    // Seed initial sync check job
-    this.enqueueJob('CATL_SYNC_JOB', { reason: 'scheduled_startup_poll' });
-
-    this.timer = setInterval(() => this.processNextJobs(), this.pollIntervalMs);
-  }
-
-  public stop() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+function parseJsonLd(html: string): any[] {
+  const values: any[] = [];
+  const scripts = html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  for (const match of scripts) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      for (const entry of entries) {
+        if (Array.isArray(entry?.['@graph'])) values.push(...entry['@graph']);
+        else values.push(entry);
+      }
+    } catch {
+      // Invalid structured metadata is evidence we cannot safely use.
     }
-    this.isRunning = false;
-    console.log('[@katl/worker] Background worker stopped gracefully.');
   }
+  return values;
+}
 
-  private async processNextJobs() {
-    const pendingJobs = this.jobQueue.filter((j) => !j.startedAt && !j.completedAt && !j.failedAt);
-    if (pendingJobs.length === 0) return;
-
-    for (const job of pendingJobs) {
-      job.startedAt = new Date().toISOString();
-      job.attempt += 1;
-
+async function runCatlSync() {
+  const pool = getDatabasePool();
+  const { rows: sources } = await pool.query(
+    'SELECT id, name, url, source_type, product_id FROM sync_sources WHERE enabled = true ORDER BY id'
+  );
+  const outcomes: Array<{ sourceId: string; status: string; changes: number; error?: string }> = [];
+  for (const source of sources) {
+    try {
+      const url = new URL(source.url);
+      if (url.protocol !== 'https:' || !/(^|\.)catl\.com(?:\.cn)?$/i.test(url.hostname)) throw new Error('SOURCE_HOST_NOT_ALLOWED');
+      const response = await fetch(url, {
+        redirect: 'error',
+        headers: {
+          'User-Agent': 'KATL-BESS-Product-Monitor/1.0 (+https://katl-energy.com.ua/contact)',
+          Accept: 'text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.5',
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) throw new Error(`SOURCE_HTTP_${response.status}`);
+      const contentType = (response.headers.get('content-type') || 'application/octet-stream').split(';')[0];
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.byteLength > 15 * 1024 * 1024) throw new Error('SOURCE_TOO_LARGE');
+      const sha256 = createHash('sha256').update(bytes).digest('hex');
+      const isPdf = contentType === 'application/pdf' || url.pathname.toLowerCase().endsWith('.pdf');
+      const bodyEncoding = isPdf ? 'base64' : 'utf8';
+      const rawPayload = isPdf ? bytes.toString('base64') : bytes.toString('utf8');
+      const client = await pool.connect();
+      let snapshotId: string;
       try {
-        await this.handleJob(job);
-        job.completedAt = new Date().toISOString();
-        console.log(`[@katl/worker] Job ${job.id} [${job.type}] completed successfully.`);
-      } catch (err: any) {
-        console.error(`[@katl/worker] Job ${job.id} [${job.type}] attempt ${job.attempt} failed:`, err.message);
-        if (job.attempt >= job.maxAttempts) {
-          job.failedAt = new Date().toISOString();
-          job.error = err.message;
-          console.error(`[@katl/worker] Job ${job.id} moved to Dead Letter Queue.`);
+        await client.query('BEGIN');
+        const saved = await client.query(
+          `INSERT INTO sync_snapshots (source_id, content_hash, raw_payload, captured_at, http_status, content_type, body_encoding, size_bytes)
+           VALUES ($1,$2,$3,NOW(),$4,$5,$6,$7)
+           ON CONFLICT (source_id, content_hash) DO UPDATE SET captured_at = NOW()
+           RETURNING id`,
+          [source.id, sha256, rawPayload, response.status, contentType, bodyEncoding, bytes.byteLength]
+        );
+        snapshotId = saved.rows[0].id;
+        await client.query('UPDATE sync_sources SET last_checked = NOW(), last_hash = $1 WHERE id = $2', [sha256, source.id]);
+
+        let changes = 0;
+        if (!isPdf && source.product_id) {
+          const productResult = await client.query(
+            'SELECT id, name, short_desc FROM pim_products WHERE id = $1 FOR UPDATE',
+            [source.product_id]
+          );
+          const product = productResult.rows[0];
+          const structured = parseJsonLd(rawPayload).find((value) => {
+            const type = Array.isArray(value?.['@type']) ? value['@type'] : [value?.['@type']];
+            return type.some((item: unknown) => String(item).toLowerCase() === 'product');
+          });
+          if (product && structured) {
+            const candidates: Array<{ field: string; oldValue: string; newValue: string; evidence: string }> = [];
+            if (typeof structured.name === 'string' && structured.name.trim() && structured.name.trim() !== product.name) {
+              candidates.push({ field: 'name', oldValue: product.name, newValue: structured.name.trim().slice(0, 255), evidence: JSON.stringify({ name: structured.name }) });
+            }
+            if (typeof structured.description === 'string' && structured.description.trim() && structured.description.trim() !== product.short_desc) {
+              candidates.push({ field: 'short_desc', oldValue: product.short_desc, newValue: structured.description.trim().slice(0, 4000), evidence: JSON.stringify({ description: structured.description }).slice(0, 4000) });
+            }
+            for (const candidate of candidates) {
+              const existing = await client.query(
+                "SELECT 1 FROM sync_changes WHERE product_id = $1 AND field = $2 AND status = 'PENDING_REVIEW' LIMIT 1",
+                [product.id, candidate.field]
+              );
+              if (existing.rowCount) continue;
+              await client.query(
+                'INSERT INTO sync_changes (id, product_id, product_name, field, old_value, new_value, source_url, confidence, snapshot_id, evidence_excerpt) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,\'MEDIUM\',$8,$9)',
+                [`CHG-${randomUUID()}`, product.id, product.name, candidate.field, JSON.stringify(candidate.oldValue), JSON.stringify(candidate.newValue), source.url, snapshotId, candidate.evidence]
+              );
+              changes++;
+            }
+          }
         }
+        await client.query('COMMIT');
+        outcomes.push({ sourceId: source.id, status: isPdf ? 'SNAPSHOT_SAVED_EXTRACTION_PENDING' : 'SNAPSHOT_SAVED', changes });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
+    } catch (error) {
+      outcomes.push({ sourceId: source.id, status: 'FAILED', changes: 0, error: error instanceof Error ? error.message : 'unknown' });
     }
   }
-
-  private async handleJob(job: QueueJob) {
-    switch (job.type) {
-      case 'CATL_SYNC_JOB': {
-        const result = await syncEngine.runSync();
-        db.logAudit('BACKGROUND_JOB_EXECUTED', 'Worker', job.id, 'WorkerSystem', {
-          jobType: job.type,
-          sourcesChecked: result.sourcesChecked,
-          diffsFound: result.detectedChanges.length,
-        });
-        break;
-      }
-      case 'RFQ_DISPATCH_JOB': {
-        // Dispatch notifications for new RFQs
-        db.logAudit('RFQ_NOTIFICATION_SENT', 'RFQ', job.payload.rfqId || 'N/A', 'WorkerSystem', {
-          recipient: 'sales@katl-energy.com.ua',
-          delivered: true,
-        });
-        break;
-      }
-      case 'SEO_REBUILD_JOB': {
-        // Sitemap updated timestamp trigger
-        console.log('[@katl/worker] Rebuilt SEO Sitemaps and Product Structured Metadata.');
-        break;
-      }
-      case 'TRANSLATION_JOB': {
-        console.log('[@katl/worker] Synchronized Translation Memory hashes.');
-        break;
-      }
-      default:
-        console.log(`[@katl/worker] Processed generic job type: ${job.type}`);
-    }
+  if (outcomes.some((outcome) => outcome.status === 'FAILED')) {
+    throw new Error(`PRODUCT_SYNC_PARTIAL_FAILURE:${JSON.stringify(outcomes)}`);
   }
+  console.log(JSON.stringify({ level: 'info', event: 'product_sync_finished', outcomes }));
+}
 
-  public getQueueStats() {
-    return {
-      total: this.jobQueue.length,
-      pending: this.jobQueue.filter((j) => !j.startedAt).length,
-      completed: this.jobQueue.filter((j) => !!j.completedAt).length,
-      failed: this.jobQueue.filter((j) => !!j.failedAt).length,
-    };
+async function processJob(queue: PlatformQueueName, job: { name: string; data: Record<string, any> }) {
+  if (queue === 'product-sync' && job.name === 'CATL_SYNC_JOB') {
+    await runCatlSync();
+    return;
+  }
+  if (queue === 'rfq-dispatch' && job.name === 'RFQ_DISPATCH_JOB') {
+    if (typeof job.data.rfqId !== 'string') throw new Error('INVALID_RFQ_JOB');
+    await dispatchRfq(job.data.rfqId);
+    return;
+  }
+  throw new Error(`HANDLER_NOT_CONFIGURED:${queue}:${job.name}`);
+}
+
+const workers = QUEUE_NAMES.map((queue) => {
+  const worker = createPlatformWorker(queue, (job) => processJob(queue, job), { concurrency: 4 });
+  worker.on('failed', (job, error) => {
+    console.error(JSON.stringify({ level: 'error', event: 'job_failed', queue, jobId: job?.id, error: error.message }));
+  });
+  worker.on('completed', (job) => {
+    console.log(JSON.stringify({ level: 'info', event: 'job_completed', queue, jobId: job.id, name: job.name }));
+  });
+  return worker;
+});
+
+let draining = false;
+async function drainOutbox() {
+  if (draining) return;
+  draining = true;
+  let client: PoolClient | null = null;
+  try {
+    const transactionClient = await getDatabasePool().connect();
+    client = transactionClient;
+    await transactionClient.query('BEGIN');
+    const { rows } = await transactionClient.query(
+      "SELECT id, event_type, payload FROM platform_outbox WHERE status = 'PENDING' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 25"
+    );
+    for (const event of rows) {
+      const queue = queueByEvent[event.event_type];
+      if (!queue) {
+        await transactionClient.query("UPDATE platform_outbox SET status = 'FAILED', last_error = $1 WHERE id = $2", ['Unsupported event type', event.id]);
+        continue;
+      }
+      const job = await enqueuePlatformJob(queue, event.event_type, event.payload, { jobId: event.id });
+      await transactionClient.query(
+        "UPDATE platform_outbox SET status = 'QUEUED', queue_job_id = $1, attempts = attempts + 1, queued_at = NOW(), last_error = NULL WHERE id = $2",
+        [job.id, event.id]
+      );
+    }
+    await transactionClient.query('COMMIT');
+  } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => undefined);
+    console.error(JSON.stringify({ level: 'error', event: 'outbox_drain_failed', error: error instanceof Error ? error.message : 'unknown' }));
+  } finally {
+    client?.release();
+    draining = false;
   }
 }
 
-export const worker = new KatlBackgroundWorker();
-worker.start();
+const outboxTimer = setInterval(() => void drainOutbox(), 2000);
+void drainOutbox();
+void getPlatformQueue('product-sync').add('CATL_SYNC_JOB', {}, {
+  jobId: 'catl-scheduled-sync',
+  repeat: { every: 6 * 60 * 60 * 1000 },
+}).catch((error) => {
+  console.error(JSON.stringify({ level: 'error', event: 'product_sync_schedule_failed', error: error instanceof Error ? error.message : 'unknown' }));
+});
+console.log(JSON.stringify({ level: 'info', event: 'worker_started', queues: QUEUE_NAMES }));
+
+async function shutdown() {
+  clearInterval(outboxTimer);
+  await Promise.all(workers.map((worker) => worker.close()));
+  await closePlatformQueues();
+  await closeDatabasePool();
+  process.exit(0);
+}
+
+process.once('SIGTERM', () => void shutdown());
+process.once('SIGINT', () => void shutdown());

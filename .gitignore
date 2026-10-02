@@ -4,6 +4,7 @@ dist/
 coverage/
 .DS_Store
 *.log
+*.tsbuildinfo
 .env*
 !.env.example
 .katl_db.json
@@ -12,5 +13,6 @@ runtime-data/
 uploads/private/
 .turbo/
 .next/
+test-results/
+playwright-report/
 fixtures/runtime/
-

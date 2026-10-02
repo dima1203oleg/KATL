@@ -1,142 +1,151 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- * 
- * Central Engineering Calculation Service for KATL Platform
- * Versioned algorithms for BESS Sizing, LCOS, Financial ROI, and BOM Generation.
- */
-
-export const CALCULATION_ENGINE_VERSION = 'v1.4.2-ua-2026';
+/** Deterministic preliminary sizing math. It does not select a vendor product or estimate project economics. */
+export const CALCULATION_ENGINE_VERSION = 'bess-energy-sizing-v2';
 
 export interface BessSizingInput {
-  solarMw: number;
+  solarMw?: number;
   loadMw: number;
   durationHours: number;
-  tariffUah?: number;
   reservePct?: number;
-}
-
-export interface BessEconomics {
-  estimatedCapexUsd: number;
-  annualSavingsUah: number;
-  annualSavingsUsd: number;
-  paybackYears: number;
-  irrPercent: number;
-  lcosCentPerKwh: number;
-}
-
-export interface BomItem {
-  category: string;
-  item: string;
-  quantity: number;
-  unit: string;
 }
 
 export interface BessSizingOutput {
   algorithmVersion: string;
   calculatedAt: string;
-  calculatedCapacityMwh: number;
-  recommendedPowerMw: number;
-  recommendedProduct: {
-    id: string;
-    name: string;
-    containerCount: number;
-  };
-  economics: BessEconomics;
-  bom: BomItem[];
+  input: Required<BessSizingInput>;
+  requestedPowerMw: number;
+  requestedDeliverableEnergyMwh: number;
+  nominalEnergyWithReserveMwh: number;
+  assumptions: string[];
+  limitations: string[];
 }
 
 export class BessEngineeringCalculator {
-  public static calculate(input: BessSizingInput): BessSizingOutput {
-    const { solarMw, loadMw, durationHours, tariffUah = 8.5, reservePct = 10 } = input;
-
-    // Usable capacity considering duration and safety reserve
-    const baseCapacity = loadMw * durationHours;
-    const capacityMwh = Number((baseCapacity * (1 + reservePct / 100)).toFixed(2));
-    const powerMw = Number(loadMw.toFixed(2));
-
-    // Determine CATL container selection based on optimal unit density
-    let productId = 'catl-enerone-plus';
-    let productName = 'CATL EnerOne Plus';
-    let containerCount = Math.max(1, Math.ceil((capacityMwh * 1000) / 372.7));
-
-    if (capacityMwh >= 5.0) {
-      productId = 'catl-tener-h';
-      productName = 'CATL TENER H (9.008 МВт·год)';
-      containerCount = Math.max(1, Math.ceil(capacityMwh / 9.008));
-    } else if (capacityMwh >= 2.0) {
-      productId = 'catl-tener-s';
-      productName = 'CATL TENER S (6.25 МВт·год)';
-      containerCount = Math.max(1, Math.ceil(capacityMwh / 6.25));
+  static calculate(input: BessSizingInput): BessSizingOutput {
+    const normalized = {
+      solarMw: input.solarMw ?? 0,
+      loadMw: input.loadMw,
+      durationHours: input.durationHours,
+      reservePct: input.reservePct ?? 0,
+    };
+    if (!Number.isFinite(normalized.solarMw) || normalized.solarMw < 0 || normalized.solarMw > 100_000) {
+      throw new RangeError('solarMw must be between 0 and 100000 MW');
+    }
+    if (!Number.isFinite(normalized.loadMw) || normalized.loadMw <= 0 || normalized.loadMw > 100_000) {
+      throw new RangeError('loadMw must be greater than 0 and no more than 100000 MW');
+    }
+    if (!Number.isFinite(normalized.durationHours) || normalized.durationHours <= 0 || normalized.durationHours > 168) {
+      throw new RangeError('durationHours must be greater than 0 and no more than 168 hours');
+    }
+    if (!Number.isFinite(normalized.reservePct) || normalized.reservePct < 0 || normalized.reservePct > 50) {
+      throw new RangeError('reservePct must be between 0 and 50 percent');
     }
 
-    // CAPEX model based on utility-scale vs commercial volume
-    const capexPerKwhUsd = capacityMwh >= 5 ? 185 : 220;
-    const totalCapexUsd = Math.round(capacityMwh * 1000 * capexPerKwhUsd);
-
-    // Peak shaving / tariff spread financial model (Kyiv/UA C&I standard tariffs)
-    const dailyShiftedKwh = capacityMwh * 1000 * 0.92; // RTE adjusted
-    const peakTariffSpreadUah = tariffUah * 0.45;
-    const annualSavingsUah = Math.round(dailyShiftedKwh * peakTariffSpreadUah * 330);
-    const annualSavingsUsd = Math.round(annualSavingsUah / 41.5);
-
-    const paybackYears = Math.max(2.5, Number((totalCapexUsd / annualSavingsUsd).toFixed(1)));
-    const irrPercent = Number((100 / paybackYears + solarMw * 1.5).toFixed(1));
-    const lcosCentPerKwh = Number((6.8 + (durationHours === 4 ? 0.6 : 1.2)).toFixed(1));
-
-    // Automated Bill of Materials (BOM)
-    const bom: BomItem[] = [
-      {
-        category: 'Battery Energy Storage',
-        item: `${productName} літій-залізо-фосфатний комплекс`,
-        quantity: containerCount,
-        unit: 'блок',
-      },
-      {
-        category: 'Power Conversion (PCS)',
-        item: `Двонаправлений інвертор PCS ${powerMw} МВт Grid-Forming`,
-        quantity: 1,
-        unit: 'шафа',
-      },
-      {
-        category: 'Medium Voltage Substation',
-        item: `Трансформатор силовий ТМГ 10/0.4 кВ (${Math.ceil(powerMw * 1.25 * 1000)} кВА)`,
-        quantity: 1,
-        unit: 'шт',
-      },
-      {
-        category: 'Monitoring & Safety',
-        item: 'CATL Native AI EMS + АСКОЕ / ЛУЗОД телеметрія',
-        quantity: 1,
-        unit: 'комплект',
-      },
-      {
-        category: 'Fire Suppression & HVAC',
-        item: 'Двоконтурне рідинне охолодження + газова система NFPA 855',
-        quantity: containerCount,
-        unit: 'інтегрована система',
-      },
-    ];
-
+    const requestedDeliverableEnergyMwh = normalized.loadMw * normalized.durationHours;
+    const nominalEnergyWithReserveMwh = requestedDeliverableEnergyMwh * (1 + normalized.reservePct / 100);
     return {
       algorithmVersion: CALCULATION_ENGINE_VERSION,
       calculatedAt: new Date().toISOString(),
-      calculatedCapacityMwh: capacityMwh,
-      recommendedPowerMw: powerMw,
-      recommendedProduct: {
-        id: productId,
-        name: productName,
-        containerCount,
-      },
-      economics: {
-        estimatedCapexUsd: totalCapexUsd,
-        annualSavingsUah,
-        annualSavingsUsd,
-        paybackYears,
-        irrPercent,
-        lcosCentPerKwh,
-      },
-      bom,
+      input: normalized,
+      requestedPowerMw: normalized.loadMw,
+      requestedDeliverableEnergyMwh: round(requestedDeliverableEnergyMwh, 4),
+      nominalEnergyWithReserveMwh: round(nominalEnergyWithReserveMwh, 4),
+      assumptions: [
+        'Requested load is maintained for the full entered duration.',
+        'Reserve percentage is an explicit user input and is applied to deliverable energy.',
+        'Solar generation is recorded as context only and is not credited against storage sizing.',
+      ],
+      limitations: [
+        'Does not include conversion losses, auxiliary consumption, temperature derating, degradation, or operating constraints.',
+        'Does not select a CATL product, determine equipment quantities, or estimate price, LCOS, savings, or payback.',
+        'Requires site load, grid, protection, and product-specific data before engineering design.',
+      ],
     };
   }
+}
+
+export const LCOS_ALGORITHM_VERSION = 'lcos-discounted-throughput-v1';
+export interface LcosInput {
+  capexUsd: number;
+  annualOpexUsd: number;
+  capacityKwh: number;
+  cyclesPerYear: number;
+  degradationPct: number;
+  lifetimeYears: number;
+  roundTripEfficiencyPct: number;
+  discountRatePct: number;
+}
+export interface LcosOutput {
+  algorithmVersion: string;
+  calculatedAt: string;
+  inputs: LcosInput;
+  lcosUsdPerKwh: number;
+  annualThroughputKwh: number;
+  lifetimeUndiscountedThroughputKwh: number;
+  presentValueThroughputKwh: number;
+  presentValueCostUsd: number;
+  sensitivity: { degradationMinusOnePct: number; base: number; degradationPlusOnePct: number };
+  assumptions: string[];
+}
+
+export function calculateLcos(input: LcosInput): LcosOutput {
+  validateLcosInput(input);
+  const base = lcosCore(input);
+  const lowerDegradation = lcosCore({ ...input, degradationPct: Math.max(0, input.degradationPct - 1) }).lcosUsdPerKwh;
+  const higherDegradation = lcosCore({ ...input, degradationPct: Math.min(100, input.degradationPct + 1) }).lcosUsdPerKwh;
+  return {
+    algorithmVersion: LCOS_ALGORITHM_VERSION,
+    calculatedAt: new Date().toISOString(),
+    inputs: input,
+    ...base,
+    sensitivity: { degradationMinusOnePct: lowerDegradation, base: base.lcosUsdPerKwh, degradationPlusOnePct: higherDegradation },
+    assumptions: [
+      'Capacity is the energy delivered per full-equivalent cycle before annual degradation.',
+      'Round-trip efficiency scales delivered energy once; no charge/discharge tariff asymmetry is modelled.',
+      'CAPEX is paid at year zero and OPEX is paid at each year end.',
+      'Degradation is compounded annually; cycles per year are held constant.',
+      'No residual value, replacement, taxes, financing, augmentation, or salvage value is included.',
+    ],
+  };
+}
+
+function lcosCore(input: LcosInput) {
+  const efficiency = input.roundTripEfficiencyPct / 100;
+  const degradation = input.degradationPct / 100;
+  const discount = input.discountRatePct / 100;
+  let presentValueThroughputKwh = 0;
+  let lifetimeUndiscountedThroughputKwh = 0;
+  let presentValueOpexUsd = 0;
+  for (let year = 1; year <= input.lifetimeYears; year++) {
+    const annualEnergy = input.capacityKwh * input.cyclesPerYear * efficiency * Math.pow(1 - degradation, year - 1);
+    lifetimeUndiscountedThroughputKwh += annualEnergy;
+    presentValueThroughputKwh += annualEnergy / Math.pow(1 + discount, year);
+    presentValueOpexUsd += input.annualOpexUsd / Math.pow(1 + discount, year);
+  }
+  const presentValueCostUsd = input.capexUsd + presentValueOpexUsd;
+  if (presentValueThroughputKwh <= 0) throw new RangeError('Expected lifetime energy throughput must be greater than zero');
+  return {
+    lcosUsdPerKwh: round(presentValueCostUsd / presentValueThroughputKwh, 6),
+    annualThroughputKwh: round(input.capacityKwh * input.cyclesPerYear * efficiency, 3),
+    lifetimeUndiscountedThroughputKwh: round(lifetimeUndiscountedThroughputKwh, 3),
+    presentValueThroughputKwh: round(presentValueThroughputKwh, 3),
+    presentValueCostUsd: round(presentValueCostUsd, 2),
+  };
+}
+
+function validateLcosInput(input: LcosInput) {
+  const ranges: Array<[keyof LcosInput, number, number]> = [
+    ['capexUsd', 0, 10_000_000_000], ['annualOpexUsd', 0, 1_000_000_000],
+    ['capacityKwh', 0.001, 10_000_000_000], ['cyclesPerYear', 0.001, 3650],
+    ['degradationPct', 0, 100], ['lifetimeYears', 1, 50],
+    ['roundTripEfficiencyPct', 0.001, 100], ['discountRatePct', 0, 100],
+  ];
+  for (const [key, min, max] of ranges) {
+    const value = input[key];
+    if (!Number.isFinite(value) || value < min || value > max) throw new RangeError(`${key} must be between ${min} and ${max}`);
+  }
+  if (!Number.isInteger(input.lifetimeYears)) throw new RangeError('lifetimeYears must be a whole number');
+}
+
+function round(value: number, decimals: number) {
+  return Number(value.toFixed(decimals));
 }

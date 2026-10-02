@@ -5,7 +5,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import { db } from '../db/database';
+import { getDatabasePool } from '../../../packages/database/src/client';
 import {
   AiTaskType,
   AiTaskRequest,
@@ -33,6 +33,7 @@ export interface AIAdvisorResult {
   provider: string;
   model: string;
   latencyMs: number;
+  sources?: Array<{ productId: string; productName: string; sourceUrl: string; verifiedAt: string }>;
   recommendation?: {
     productName: string;
     productId: string;
@@ -63,9 +64,7 @@ class AIProviderGateway {
   private initializeProviders() {
     SUPPORTED_AI_PROVIDERS.forEach((p) => {
       let status: ProviderHealthStatus = 'NOT_CONFIGURED';
-      if (p.envKeyName && process.env[p.envKeyName]) {
-        status = 'ACTIVE';
-      } else if (p.id === 'google-gemini' && process.env.GEMINI_API_KEY) {
+      if (p.id === 'google-gemini' && process.env.GEMINI_API_KEY) {
         status = 'ACTIVE';
       }
 
@@ -134,7 +133,7 @@ class AIProviderGateway {
     );
 
     // 2. Try Primary Provider (Google Gemini if available)
-    if (this.geminiClient && process.env.GEMINI_API_KEY) {
+    if (this.geminiClient && process.env.GEMINI_API_KEY && eligibleProviders.some((provider) => provider.id === 'google-gemini')) {
       try {
         const prompt = `${request.prompt}\nContext: ${JSON.stringify(request.context || {})}`;
         const modelName = request.preferredModel || 'gemini-2.5-flash';
@@ -170,31 +169,12 @@ class AIProviderGateway {
           completedAt: new Date().toISOString(),
         };
       } catch (err: any) {
-        console.warn('[AI Gateway] Primary Gemini provider failed, attempting fallback:', err.message);
+        console.warn('[AI Gateway] Gemini request failed:', err.message);
         this.tripCircuitBreaker('google-gemini');
+        throw new Error('AI_PROVIDER_UNAVAILABLE');
       }
     }
-
-    // 3. Deterministic Domain Fallback
-    const fallbackText = this.generateDeterministicOutput(request);
-    const latencyMs = Date.now() - startTime;
-
-    return {
-      requestId,
-      task: request.task,
-      provider: 'deterministic-energy-engine',
-      model: 'catl-bess-rules-v1',
-      content: fallbackText,
-      tokenUsage: {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        estimatedCostUsd: 0,
-      },
-      latencyMs,
-      finishReason: 'fallback',
-      completedAt: new Date().toISOString(),
-    };
+    throw new Error('AI_PROVIDER_UNAVAILABLE');
   }
 
   /**
@@ -205,157 +185,53 @@ class AIProviderGateway {
     context?: { powerKw?: number; loadMw?: number; location?: string }
   ): Promise<AIAdvisorResult> {
     const startTime = Date.now();
-    const lastUserMsg = messages.filter((m) => m.role === 'user').pop()?.content || '';
+    if (!this.geminiClient || !process.env.GEMINI_API_KEY) throw new Error('AI_PROVIDER_UNAVAILABLE');
 
-    // Fetch verified PIM data to inject as grounding context
-    const products = db.getAllProducts();
-    const pimContext = products.map((p) => ({
-      id: p.id,
-      name: p.name,
-      capacity: p.energySpecs.nominalCapacity,
-      cell: p.cellSpecs.chemistry,
-      efficiency: p.energySpecs.efficiencyRoundTrip,
-      voltage: p.energySpecs.nominalVoltage,
-      cooling: p.thermalSpecs.coolingMethod,
-      cycleLife: p.cellSpecs.cycleLife,
+    const { rows } = await getDatabasePool().query(
+      `SELECT p.id, p.name, p.source_url, p.verified_at, p.confidence,
+        s.energy_specs, s.cell_specs, s.mechanical_specs, s.thermal_specs, s.safety_specs
+       FROM pim_products p JOIN pim_specifications s ON s.product_id = p.id
+       WHERE p.status IN ('PUBLISHED', 'AVAILABLE') ORDER BY p.name`
+    );
+    if (!rows.length) throw new Error('PIM_DATA_UNAVAILABLE');
+
+    const systemInstruction = `You are a technical BESS information assistant. Answer in the user's language. Only state product facts supported by the provided PIM records. If the records do not support an answer, say what information is missing. Never invent product specifications, certifications, savings, payback, pricing, or source citations. Do not provide engineering approval or safety certification.`;
+    const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = messages.map((message) => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: message.content }],
     }));
-
-    if (this.geminiClient && process.env.GEMINI_API_KEY) {
-      try {
-        const systemPrompt = `Ти провідний інженер платформи CATL Energy Storage в Україні.
-Твоє завдання — професійно консультувати енергетиків підприємств, підбирати оптимальні конфігурації BESS та розраховувати окупність.
-Використовуй виключно офіційні верифіковані дані CATL:
-${JSON.stringify(pimContext, null, 2)}
-
-Правила:
-1. Ніколи не вигадуй ємності, яких немає в PIM (TENER H: 9.008 МВт·год, TENER S: 6.25 МВт·год, EnerOne Plus: 372.7 кВт·год, TENER Sodium: 4.5 МВт·год).
-2. Відповідай українською мовою лаконічно, технічно грамотно (згадуй LFP, рідинне охолодження, стандарти NFPA 855/UL 9540A).
-3. Якщо користувач задає параметри об'єкта, запропонуй конкретну систему та орієнтовну окупність.`;
-
-        const response = await this.geminiClient.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            { role: 'user', parts: [{ text: systemPrompt }] },
-            ...messages.map((m) => ({
-              role: m.role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: m.content }],
-            })),
-          ],
-        });
-
-        const text = response.text || '';
-        const latencyMs = Date.now() - startTime;
-        const totalTokens = Math.max(50, Math.ceil(text.length / 4));
-        const estimatedCostUsd = (totalTokens * 0.0003) / 1000;
-
-        this.recordUsage('google-gemini', totalTokens, estimatedCostUsd);
-
-        // Extract recommendation if user provided power/capacity
-        const rec = this.extractRecommendation(lastUserMsg, context);
-
-        return {
-          text,
-          provider: 'Google Gemini 2.5 Flash',
-          model: 'gemini-2.5-flash',
-          latencyMs,
-          recommendation: rec,
-        };
-      } catch (err: any) {
-        console.warn('[AI Gateway] Gemini chat error, using deterministic grounding:', err.message);
-      }
-    }
-
-    // Deterministic fallback response grounded in verified PIM
-    const latencyMs = Date.now() - startTime;
-    const rec = this.extractRecommendation(lastUserMsg, context);
-    const text = `На основі верифікованих інженерних специфікацій CATL для вашого об’єкта рекомендується **${rec.productName}**.\n\n` +
-      `• Розрахункова потужність: **${(rec.powerKw / 1000).toFixed(1)} МВт** / Ємність: **${(rec.capacityKwh / 1000).toFixed(1)} МВт·год**\n` +
-      `• Орієнтовне скорочення витрат на потужність (Peak Shaving): **-${rec.savingsPct}%**\n` +
-      `• Розрахунковий термін окупності: **${rec.paybackYears} роки** (LCOS ~ 0.058 $/кВт·год)\n` +
-      `• Безпека: Комірки LFP з нульовою деградацією у перші 5 років, двоконтурне рідинне охолодження та система пожежогасіння NFPA 855 / UL 9540A.`;
-
-    return {
-      text,
-      provider: 'Deterministic BESS Grounding Engine',
-      model: 'bess-grounding-v1.4',
-      latencyMs,
-      recommendation: rec,
-    };
-  }
-
-  private extractRecommendation(
-    query: string,
-    context?: { powerKw?: number; loadMw?: number; location?: string }
-  ) {
-    let powerKw = context?.powerKw || (context?.loadMw ? context.loadMw * 1000 : 1200);
-    const qLower = query.toLowerCase();
-
-    if (qLower.includes('5 mw') || qLower.includes('5 мвт') || qLower.includes('10 мвт')) {
-      powerKw = 5000;
-    } else if (qLower.includes('500 квт') || qLower.includes('300 квт')) {
-      powerKw = 500;
-    }
-
-    const capacityKwh = powerKw * 2;
-
-    if (capacityKwh >= 6000) {
+    const evidence = `\nProject context: ${JSON.stringify(context || {})}\nPIM evidence: ${JSON.stringify(rows)}`;
+    const lastContent = contents[contents.length - 1];
+    if (lastContent?.role === 'user') lastContent.parts[0].text += evidence;
+    else contents.push({ role: 'user', parts: [{ text: evidence.trim() }] });
+    try {
+      const response = await this.geminiClient.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents,
+        config: { systemInstruction },
+      });
+      const text = response.text || '';
+      if (!text.trim()) throw new Error('EMPTY_PROVIDER_RESPONSE');
+      const latencyMs = Date.now() - startTime;
+      const totalTokens = Math.max(1, Math.ceil(text.length / 4));
+      const estimatedCostUsd = (totalTokens * 0.0003) / 1000;
+      this.recordUsage('google-gemini', totalTokens, estimatedCostUsd);
       return {
-        productName: 'CATL TENER H (9.008 МВт·год)',
-        productId: 'catl-tener-h',
-        powerKw,
-        capacityKwh,
-        savingsPct: 46,
-        paybackYears: 3.1,
-        reasoning: 'Висока щільність енергії для промислових парків та СЕС великої потужності.',
+        text,
+        provider: 'Google Gemini',
+        model: 'gemini-2.5-flash',
+        latencyMs,
+        sources: rows.map((row: any) => ({
+          productId: row.id,
+          productName: row.name,
+          sourceUrl: row.source_url,
+          verifiedAt: row.verified_at,
+        })).filter((source: any) => source.sourceUrl),
       };
-    } else if (capacityKwh >= 2000) {
-      return {
-        productName: 'CATL TENER S (6.25 МВт·год)',
-        productId: 'catl-tener-s',
-        powerKw,
-        capacityKwh,
-        savingsPct: 42,
-        paybackYears: 3.4,
-        reasoning: 'Стандартизований 20-футовий контейнер з високим ресурсом для C&I споживачів.',
-      };
-    } else {
-      return {
-        productName: 'CATL EnerOne Plus (372.7 кВт·год)',
-        productId: 'catl-enerone-plus',
-        powerKw,
-        capacityKwh,
-        savingsPct: 35,
-        paybackYears: 3.9,
-        reasoning: 'Модульні зовнішні шафи для підприємств та критичної інфраструктури.',
-      };
-    }
-  }
-
-  private generateDeterministicOutput(request: AiTaskRequest): string {
-    switch (request.task) {
-      case 'translate_technical_content':
-        return `[BESS Verified Translation]: ${request.prompt}`;
-      case 'extract_datasheet_specs':
-        return JSON.stringify({
-          nominalCapacityMwh: 9.008,
-          cellChemistry: 'LFP',
-          cycleLife: 15000,
-          cooling: 'Liquid Cooling',
-          protectionRating: 'IP55',
-        });
-      case 'classify_lead_rfq':
-        return JSON.stringify({
-          priority: 'HIGH',
-          segment: 'INDUSTRIAL_PEAK_SHAVING',
-          estimatedMwh: 4.0,
-        });
-      case 'generate_seo_metadata':
-        return JSON.stringify({
-          title: 'CATL BESS в Україні — Промислові накопичувачі енергії',
-          description: 'Офіційні системи накопичення енергії CATL TENER, EnerOne в Україні.',
-        });
-      default:
-        return 'Інженерний розрахунок завершено за верифікованою методикою CATL BESS.';
+    } catch (err: any) {
+      console.warn('[AI Gateway] Gemini chat failed:', err.message);
+      this.tripCircuitBreaker('google-gemini');
+      throw new Error('AI_PROVIDER_UNAVAILABLE');
     }
   }
 
