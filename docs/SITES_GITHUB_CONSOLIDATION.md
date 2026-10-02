@@ -1,8 +1,8 @@
-# Sites design import into the canonical GitHub repository
+# Sites design reference and canonical KATL implementation
 
 The code in this repository is the canonical implementation. The separate ChatGPT Sites project is a published snapshot and does not automatically synchronize edits with GitHub.
 
-On 2026-10-02, the compatible public website design work from the Sites source was merged into the current `main` implementation. The Sites source was based on an older KATL commit, so its public pages were adapted onto the newer PIM-backed routes rather than replacing the repository.
+On 2026-10-02, the compatible public website design work from the Sites source was merged into the current `main` implementation. The Sites source was based on an older KATL commit, so its public pages were adapted onto the newer PIM-backed routes rather than replacing the repository. The user uses the Sites tab to explore visual design; it is a design reference, not a second implementation or a catalog editor.
 
 ## Imported
 
@@ -17,7 +17,15 @@ On 2026-10-02, the compatible public website design work from the Sites source w
 - The current KATL API, PIM, PostgreSQL, fact provenance and product publication workflow remain the source of catalog data.
 - Design preview content is not inserted into PIM or the product API. Unverified example specifications were removed from the preview.
 - CATL is presented as the manufacturer; KATL remains identified as the platform. No distributor or official representative status is claimed.
-- Sites does not sync source changes to GitHub. Continue code edits from this repository; use the platform CMS for content when its publishing workflow is available.
+- Sites does not sync source changes to GitHub. Continue implementation in this repository and treat later Sites updates as visual references to review and adapt.
+
+## Design-reference handoff contract
+
+When the Sites design changes, bring over only approved visual decisions: layout, typography, color, spacing, responsive behavior, and interaction patterns. Implement them as reusable components and design tokens within `apps/web`; keep route composition in App Router pages and shared business rules in the relevant packages and API modules.
+
+Do not copy product records, specifications, availability, certifications, source claims, or catalog structure from a visual mockup into production. The public catalog reads published product records through `apps/web/src/lib/pim/pimRepository.ts` from the canonical API/PIM. PIM and PostgreSQL remain the source of truth; mockup text and imagery are never product evidence.
+
+For each design update, review the reference, map changes to existing modules, implement the compatible UI changes in GitHub, and verify that the UI still consumes the same PIM/API data and preserves localization, accessibility, and responsive behavior. This is a deliberate design-to-code review, not automatic synchronization.
 
 ## Limits
 
