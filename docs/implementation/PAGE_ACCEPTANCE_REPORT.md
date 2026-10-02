@@ -2,7 +2,7 @@
 
 Date: 2026-10-02
 Branch: `main`
-Scope: repository implementation and local build only. This report does not certify production readiness.
+Scope: repository implementation, local runtime and the GitHub Actions run for commit `82eb7f9`. This report does not certify production readiness.
 
 ## Acceptance rules and test environment
 
@@ -13,15 +13,15 @@ Checks completed for the current web implementation:
 | Check | Result | Evidence / limit |
 |---|---|---|
 | TypeScript and workspace typecheck | PASS | `npm run lint` |
-| Unit, API and PostgreSQL integration tests | PARTIAL PASS (local) | Current API PostgreSQL suite: 8/8 passed, including source-gated PIM submission, maker-checker, engineer approval, admin publication, public visibility and RFQ association. Earlier unit/API baseline had 19 passing tests; a full current root `npm test` run is still pending. |
+| Unit, API and PostgreSQL integration tests | PASS | Local unit suite: 11/11. Current API PostgreSQL suite: 8/8, including source-gated PIM approval/publication and persisted calculation-to-RFQ association. GitHub Actions unit/integration step passed. |
 | Next.js production build | PASS | `npm run build:web` |
 | API build | PASS | `npm run build:api` |
 | Worker build | PASS | included in canonical `npm run build` |
 | Production browser journeys | PARTIAL PASS | Against the current local Next/API runtime, Playwright Chromium 9/9 and Firefox 9/9 pass (18/18). Includes geo/preference routing, localized HTML, public RFQ, persisted calculator → RFQ with unchanged values, protected admin login/status change, PIM draft creation, source registration, disabled pre-sync review, revision history, archive/source disable, logout, 404 and responsive checks. Customer/partner flows remain absent. |
 | Responsive viewport checks | PARTIAL PASS | Home has no horizontal overflow at 320, 375, 390, 430, 768, 1024, 1366 and 1920 px in Chromium and Firefox. Foldable, 200% zoom, orientation, catalog/product responsive matrix, and real device checks are pending. |
-| WebKit/Safari | BLOCKED locally | Browser engine installed; launch fails because this environment lacks WebKit OS dependencies. CI now runs `playwright install --with-deps chromium firefox webkit`, but that hosted run has not been observed. |
+| WebKit/Safari | CI PASS; physical Safari untested | Local launch lacks required WebKit OS libraries. GitHub Actions browser acceptance passed on Chromium, Firefox and WebKit. No physical iPhone/iPad Safari verification yet. |
 | PostgreSQL-backed journeys | PASS (local only) | Migrations `0001`–`0015` ran successfully on a fresh temporary PostgreSQL database; current API tests ran against local Compose PostgreSQL. A calculation snapshot was saved and attached to its RFQ. Earlier Compose acceptance stored a browser RFQ, dispatched it to local Mailpit and recorded audit; CRM remained `PENDING` because no endpoint is configured. |
-| Docker/Compose production images | PARTIAL | The previous revision's web/API/migration runner/worker images and local stack were verified. Current web/API source builds pass, but rebuilding the updated Docker images ran out of local disk. No staging deployment was performed. |
+| Docker/Compose production images | PASS in CI; local rebuild blocked | GitHub Actions built the current API, worker and web images. Local Docker rebuild ran out of disk. No staging deployment was performed. |
 | Actual PIM data and source review | FAIL / unavailable | The workflow supports human approval against a successful snapshot, but no real CATL product/document has been reviewed. Public catalog correctly remains empty. A page snapshot and manual note are not claim-level verification. |
 | Supplied visual reference | PARTIAL | Public home, product list and compare visual language now uses the supplied dark energy hero/navigation, white catalog, dark solution/engineering blocks and industrial schematic art. Exact image assets are not available; unverified specs and demo metrics were not copied. Admin has a separate compact control-center design; customer/partner screens are absent. |
 | Locale detection | PASS (unit + HTTP smoke) | Five unit cases pass. Production server returned `/` redirects: UA→`/uk-UA`, CN→`/zh-CN`, browser `zh-CN`→`/zh-CN`, saved EN preference→`/en`; country selection consumes only Vercel/Cloudflare edge headers. |
@@ -30,7 +30,7 @@ Checks completed for the current web implementation:
 
 The legacy Vite/React application remains in the repository as a migration reference. It must stay until its screens have passed functional, data, design, route/SEO, regression, and browser parity in Next.js. The root build currently checks both the legacy bundle and canonical Next/API/worker workspaces.
 
-Responsive/browser gates are partial. Chromium and Firefox exercise the responsive home through 1920 px and 404/locale/catalog/RFQ flows, including a persisted RFQ on the full local Compose stack. Required coverage still includes 2560–3440 px, foldable and landscape, 200% zoom, real safe-area devices, WebKit/Safari, Chrome/Edge/Opera, Android browsers and in-app WebViews. CI does not yet have an observed passing run, and visual-regression baselines are not configured.
+Responsive/browser gates are partial. Chromium and Firefox exercise the responsive home through 1920 px and 404/locale/catalog/RFQ flows, including a persisted RFQ on the full local Compose stack. GitHub Actions passed Chromium, Firefox and WebKit projects. Required coverage still includes 2560–3440 px, foldable and landscape, 200% zoom, real safe-area devices, Chrome/Edge/Opera, Android browsers and in-app WebViews. Visual-regression baselines are not configured.
 
 ## Public route inventory
 

@@ -1,6 +1,6 @@
 # KATL master gap matrix
 
-Audit basis: repository `main` was uploaded at `f79290b` on 2026-10-02; the current working tree adds PIM review/publication, revision history, safe published-data sync guards, and persisted BESS calculations linked to RFQs. Runtime claims were checked with source builds, clean PostgreSQL migrations through `0015`, API integration tests, local Compose services, and Chromium/Firefox browser acceptance. Current Docker image rebuild ran out of disk; this remains a gap analysis, not a production certification.
+Audit basis: repository `main` commit `82eb7f9` on 2026-10-02 includes PIM review/publication, revision history, safe published-data sync guards, and persisted BESS calculations linked to RFQs. Runtime claims were checked with source builds, clean PostgreSQL migrations through `0015`, API integration tests, local Compose services, Chromium/Firefox local acceptance, and a successful GitHub Actions run including Chromium/Firefox/WebKit and Docker builds. This remains a gap analysis, not a production certification.
 
 ## Status key
 
@@ -46,7 +46,7 @@ Statuses can be combined. Presence of an interface, package, route, test filenam
 | Notifications | PARTIAL | SMTP dispatch ran to ephemeral local Mailpit during RFQ queue acceptance; unconfigured production status is not reported as success. | No real provider credentials, delivery/complaint monitoring, complete templates, retry/idempotency acceptance or password reset. |
 | Security | PARTIAL, UNTESTED | Helmet, CORS allowlist, validation, rate limits, password/session path, role guards and secret examples exist. | No current automated security scan evidence, CSRF/CSP/HSTS acceptance, SSRF test matrix, file-upload defenses, MFA or tenant isolation. |
 | Observability / backup / DR | PARTIAL / UNTESTED | Health routes, structured worker logs and deployment/runbook notes exist. | No traces/metrics dashboards/alerts, production request propagation, automated DB/object backup or restore drill. |
-| CI / Docker | PARTIAL | CI defines PostgreSQL/Redis, migrations, API/integration tests, build, Playwright Chromium/Firefox/WebKit install and Docker image steps. Production Compose configuration validates with required settings. Prior images and local Compose stack passed; current Chromium/Firefox acceptance passed 18/18. | No observed GitHub Actions run. Rebuilding current images ran out of disk. WebKit OS dependencies, visual regression, staging and production deployment stack are unverified. |
+| CI / Docker | PARTIAL | GitHub Actions run `36982476784` passed lint/typecheck, migrations, tests, production build, Chromium/Firefox/WebKit E2E, API/worker/web image builds and dependency audit. Local Chromium/Firefox acceptance passed 18/18. | Rebuilding current images ran out of local disk. Visual regression, staging and production deployment stack are unverified. |
 | Production release | MISSING | No production credentials, staging, domain deployment or rollback evidence. | All blocking release gates; see [`FINAL_PRODUCTION_REPORT.md`](../FINAL_PRODUCTION_REPORT.md). |
 
 ## Legacy-to-Next migration matrix
