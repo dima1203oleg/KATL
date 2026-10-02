@@ -46,6 +46,21 @@ test('catalog and RFQ routes expose usable empty states and labelled inputs', as
   await expect(page.getByLabel(/компан/i)).toBeVisible();
 });
 
+test('catalog visual filters and compare page stay connected to published PIM data', async ({ page }) => {
+  const catalog = await page.goto('/uk-UA/products?category=Utility-scale&chemistry=LFP');
+  expect(catalog?.status()).toBe(200);
+  await expect(page.getByRole('heading', { name: 'Фільтри' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /опублікованих продуктів/ })).toBeVisible();
+  await expect(page.getByText('У каталозі показані лише погоджені й опубліковані записи PIM.')).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, follow');
+
+  const comparison = await page.goto('/uk-UA/compare');
+  expect(comparison?.status()).toBe(200);
+  await expect(page.getByRole('heading', { name: 'Порівняння систем CATL' })).toBeVisible();
+  await expect(page.getByText('Після перевірки та публікації продуктів у PIM тут з’явиться список для порівняння.')).toBeVisible();
+  await expect(page.getByRole('link', { name: /До каталогу/ })).toBeVisible();
+});
+
 test('unreviewed BESS translations remain reachable but are excluded from indexing', async ({ page }) => {
   for (const [path, heading, robots] of [
     ['/en/bess', 'This page is not yet available in a reviewed English version.', 'noindex, follow'],
