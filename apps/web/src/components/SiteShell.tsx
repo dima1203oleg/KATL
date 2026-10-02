@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BatteryCharging, BookOpen, BriefcaseBusiness, ChevronDown, Globe2, Menu, Search, X, Zap } from 'lucide-react';
 
 const translations: Record<string, Record<string,string>> = {
@@ -14,6 +14,16 @@ const translations: Record<string, Record<string,string>> = {
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    const resize = () => { if (window.innerWidth > 1200) setOpen(false); };
+    window.addEventListener('keydown', close); window.addEventListener('resize', resize);
+    return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', close); window.removeEventListener('resize', resize); };
+  }, [open]);
   const locale = pathname.split('/')[1] || 'uk-UA';
   const root = `/${locale}`;
   const t = translations[locale] || translations['uk-UA'];
@@ -24,8 +34,8 @@ export function SiteHeader() {
   ];
   return <header className="site-header">
     <div className="container header-inner">
-      <Link href={root} className="brand" aria-label="KATL — на головну">
-        <span className="brand-wordmark">KATL</span><span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span>
+      <Link href={root} className="brand" aria-label="CATL — на головну">
+        <span className="brand-wordmark">CATL</span><span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span>
       </Link>
       <nav className="primary-nav" aria-label="Головна навігація">
         <div className="nav-item">
@@ -70,13 +80,13 @@ export function SiteFooter() {
   return <footer className="site-footer">
     <div className="container">
       <div className="footer-grid">
-        <div className="footer-brand"><Link href={`/${locale}`} className="brand"><span className="brand-wordmark">KATL</span><span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span></Link><p>{en?'Information, tools and project requests for CATL energy storage systems in Ukraine.':zh?'乌克兰 CATL 储能系统的信息、工具与项目咨询。':'Інформація, інструменти та запити щодо систем накопичення енергії CATL для проєктів в Україні.'}</p></div>
+        <div className="footer-brand"><Link href={`/${locale}`} className="brand"><span className="brand-wordmark">CATL</span><span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span></Link><p>{en?'Information, tools and project requests for CATL energy storage systems in Ukraine.':zh?'乌克兰 CATL 储能系统的信息、工具与项目咨询。':'Інформація, інструменти та запити щодо систем накопичення енергії CATL для проєктів в Україні.'}</p></div>
         <FooterColumn title={en?'Products':zh?'产品':'Продукція'} links={[[en?'Catalog':zh?'产品目录':'Каталог систем', `/${locale}/products`],[en?'Compare':zh?'对比':'Порівняння', `/${locale}/compare`],[en?'Documents':zh?'文档':'Документи', `/${locale}/documents`]]} />
         <FooterColumn title={en?'Solutions':zh?'解决方案':'Рішення'} links={[[en?'All solutions':zh?'全部解决方案':'Усі рішення', `/${locale}/solutions`],[en?'Industries':zh?'行业':'Для галузей', `/${locale}/industries`],[en?'BESS in Ukraine':zh?'乌克兰储能':'BESS в Україні', `/${locale}/energy-storage-ukraine`]]} />
         <FooterColumn title={en?'Engineering':zh?'工程':'Інженерія'} links={[["BESS Designer", `/${locale}/bess-designer`],[en?'Calculators':zh?'计算器':'Калькулятори', `/${locale}/engineering`],[en?'Knowledge':zh?'知识库':'База знань', `/${locale}/resources`]]} />
-        <FooterColumn title={en?'Company':zh?'公司':'Компанія'} links={[[en?'About KATL':zh?'关于 KATL':'Про KATL', `/${locale}/about`],[en?'Partners':zh?'合作伙伴':'Партнерам', `/${locale}/partners`],[en?'Contact':zh?'联系':'Контакти', `/${locale}/contact`],[en?'Request a proposal':zh?'提交需求':'Запит пропозиції', `/${locale}/rfq`]]} />
+        <FooterColumn title={en?'Company':zh?'公司':'Компанія'} links={[[en?'About this site':zh?'关于本站':'Про сайт', `/${locale}/about`],[en?'Partners':zh?'合作伙伴':'Партнерам', `/${locale}/partners`],[en?'Contact':zh?'联系':'Контакти', `/${locale}/contact`],[en?'Request a proposal':zh?'提交需求':'Запит пропозиції', `/${locale}/rfq`]]} />
       </div>
-      <div className="footer-bottom"><span>© {new Date().getFullYear()} KATL · catl.site</span><span>{en?'Partnership status and legal details are published only when confirmed.':zh?'合作状态和法律信息仅在确认后发布。':'Статус партнерства, юридичні реквізити та документи надаються після підтвердження.'}</span><span><Link href={`/${locale}/privacy`}>{en?'Privacy':zh?'隐私':'Приватність'}</Link> · <Link href={`/${locale}/terms`}>{en?'Terms':zh?'条款':'Умови'}</Link></span></div>
+      <div className="footer-bottom"><span>© {new Date().getFullYear()} catl.site · {en?'KATL platform':zh?'KATL 平台':'платформа KATL'}</span><span>{en?'CATL is the product manufacturer. Partnership status and legal details are published only when confirmed.':zh?'CATL 为产品制造商。合作状态和法律信息仅在确认后发布。':'CATL є виробником продукції. Статус партнерства та юридичні реквізити вказуються лише після підтвердження.'}</span><span><Link href={`/${locale}/privacy`}>{en?'Privacy':zh?'隐私':'Приватність'}</Link> · <Link href={`/${locale}/terms`}>{en?'Terms':zh?'条款':'Умови'}</Link></span></div>
     </div>
   </footer>;
 }
@@ -84,6 +94,7 @@ export function SiteFooter() {
 export function MobileCta() {
   const pathname = usePathname();
   const locale = pathname.split('/')[1] || 'uk-UA';
+  if (pathname === `/${locale}` || ['/products','/compare','/design/tener-h'].some((path)=>pathname.endsWith(path))) return null;
   if (pathname.endsWith('/rfq') || pathname.endsWith('/bess-designer')) return null;
   const en=locale==='en';const zh=locale==='zh-CN';return <div className="mobile-cta"><Link className="button button-secondary" href={`/${locale}/bess-designer`}>{en?'Calculate':zh?'计算':'Розрахувати'}</Link><Link className="button" href={`/${locale}/rfq`}>{en?'Request a proposal':zh?'获取方案':'Отримати пропозицію'}</Link></div>;
 }
