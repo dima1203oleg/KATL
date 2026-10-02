@@ -33,6 +33,10 @@ export const rfqStatusSchema = z.enum([
 ]);
 
 const pimJsonGroup = z.record(z.string(), z.unknown());
+const pimFactSource = z.object({
+  pageSection: z.string().trim().min(1).max(255),
+  excerpt: z.string().trim().min(5).max(2000),
+}).strict();
 const pimSourceUrl = z.string().url().refine((value) => {
   try {
     const url = new URL(value);
@@ -60,6 +64,7 @@ export const pimDraftSchema = z.object({
   thermalSpecs: pimJsonGroup.default({}),
   safetySpecs: pimJsonGroup.default({}),
   compatibility: pimJsonGroup.default({}),
+  factSources: z.record(z.string().min(2).max(512), pimFactSource).optional().default({}),
 }).strict();
 
 export const bessSizingSchema = z.object({

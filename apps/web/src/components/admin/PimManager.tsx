@@ -8,19 +8,37 @@ type Product = {
   source_url: string; confidence: string; verified_at: string | null; verified_by: string | null; revision: number; updated_at: string; latest_source_snapshot_id: string | null;
   energy_specs: Record<string, unknown>; cell_specs: Record<string, unknown>; mechanical_specs: Record<string, unknown>;
   thermal_specs: Record<string, unknown>; safety_specs: Record<string, unknown>; compatibility: Record<string, unknown>;
+  fact_sources: Record<string, { pageSection: string; excerpt: string; status?: string; sourceSnapshotId?: string }>;
 };
+type FactEvidence = { pageSection: string; excerpt: string };
 type Revision = { revision: number; event: string; actor: string; note: string | null; source_snapshot_id: string | null; created_at: string };
 type Form = {
   id: string; name: string; family: string; category: string; productType: string; shortDesc: string; highlight: string; sourceUrl: string;
   energySpecs: string; cellSpecs: string; mechanicalSpecs: string; thermalSpecs: string; safetySpecs: string; compatibility: string;
+  factSources: Record<string, FactEvidence>;
 };
 
-const blank: Form = { id: '', name: '', family: '', category: '', productType: '', shortDesc: '', highlight: '', sourceUrl: '', energySpecs: '{}', cellSpecs: '{}', mechanicalSpecs: '{}', thermalSpecs: '{}', safetySpecs: '{}', compatibility: '{}' };
+const blank: Form = { id: '', name: '', family: '', category: '', productType: '', shortDesc: '', highlight: '', sourceUrl: '', energySpecs: '{}', cellSpecs: '{}', mechanicalSpecs: '{}', thermalSpecs: '{}', safetySpecs: '{}', compatibility: '{}', factSources: {} };
 const fieldGroups = [
   ['energySpecs', 'Енергія та потужність'], ['cellSpecs', 'Акумуляторні елементи'], ['mechanicalSpecs', 'Механіка'],
   ['thermalSpecs', 'Терморегулювання'], ['safetySpecs', 'Безпека'], ['compatibility', 'Сумісність'],
 ] as const;
 const categories = ['Utility-scale ESS', 'C&I ESS', 'Residential ESS', 'Data Center ESS', 'Sodium-ion ESS', 'Battery Cells', 'Battery Modules & Racks', 'PCS & Inverters', 'BMS', 'EMS', 'SCADA', 'Transformers & Switchgear', 'Thermal Management', 'Fire Safety', 'Accessories'];
+
+function factPointerSegment(value: string) { return value.replace(/~/g, '~0').replace(/\//g, '~1'); }
+function technicalFacts(form: Form) {
+  const facts: Array<{ path: string; value: unknown }> = [];
+  const visit = (path: string, value: unknown) => {
+    if (value === null || value === undefined) return;
+    if (Array.isArray(value)) { value.forEach((item,index) => visit(`${path}/${index}`,item)); return; }
+    if (typeof value === 'object') { for (const [key,child] of Object.entries(value as Record<string,unknown>)) visit(`${path}/${factPointerSegment(key)}`,child); return; }
+    facts.push({ path,value });
+  };
+  for (const [key] of fieldGroups) {
+    try { visit(`/${key.replace(/[A-Z]/g,(letter)=>`_${letter.toLowerCase()}`)}`,JSON.parse(form[key])); } catch { /* The JSON editor displays its own validation on save. */ }
+  }
+  return facts.slice(0,500);
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1/${path}`, { ...init, cache: 'no-store', headers: { ...(init?.body ? { 'content-type': 'application/json' } : {}), ...init?.headers } });
@@ -43,6 +61,7 @@ export function PimManager({ userRole }: { userRole: string }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [history, setHistory] = useState<Record<string, Revision[]>>({});
+  const [activeSnapshotId, setActiveSnapshotId] = useState('');
 
   const load = useCallback(async (q = query) => {
     setBusy(true); setError('');
@@ -55,7 +74,8 @@ export function PimManager({ userRole }: { userRole: string }) {
 
   function edit(product: Product) {
     setEditing(true); setNotice(''); setError('');
-    setForm({ id: product.id, name: product.name, family: product.family, category: product.category, productType: product.product_type, shortDesc: product.short_desc || '', highlight: product.highlight || '', sourceUrl: product.source_url || '', ...Object.fromEntries(fieldGroups.map(([key]) => [key, JSON.stringify(product[key as keyof Product] || {}, null, 2)])) } as Form);
+    setActiveSnapshotId(product.latest_source_snapshot_id || '');
+    setForm({ id: product.id, name: product.name, family: product.family, category: product.category, productType: product.product_type, shortDesc: product.short_desc || '', highlight: product.highlight || '', sourceUrl: product.source_url || '', factSources: Object.fromEntries(Object.entries(product.fact_sources || {}).map(([path,evidence]) => [path,{pageSection:evidence.pageSection,excerpt:evidence.excerpt}])), ...Object.fromEntries(fieldGroups.map(([key]) => [key, JSON.stringify(product[key as keyof Product] || {}, null, 2)])) } as Form);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -64,11 +84,13 @@ export function PimManager({ userRole }: { userRole: string }) {
     try {
       const payload: Record<string, unknown> = { ...form };
       for (const [key, label] of fieldGroups) payload[key] = asJson(form[key], label);
+      const validPaths = new Set(technicalFacts(form).map((fact) => fact.path));
+      payload.factSources = Object.fromEntries(Object.entries(form.factSources).filter(([path]) => validPaths.has(path)));
       const result = await request<{ data: { id: string; status: string; revision: number } }>(editing ? `admin/products/${encodeURIComponent(form.id)}` : 'admin/products', {
         method: editing ? 'PUT' : 'POST', body: JSON.stringify(payload),
       });
       setNotice(`Чернетку ${result.data.id} збережено · ревізія ${result.data.revision}. Статус залишається DRAFT до окремої перевірки.`);
-      setForm(blank); setEditing(false); await load('');
+      setForm(blank); setEditing(false); setActiveSnapshotId(''); await load('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Чернетку не збережено.'); }
     finally { setBusy(false); }
   }
@@ -117,11 +139,12 @@ export function PimManager({ userRole }: { userRole: string }) {
   }
 
   return <div className="pim-workspace">
-    <section className="admin-card"><div className="admin-section-title"><div><h2>{editing ? `Редагування чернетки · ${form.id}` : 'Нова картка продукту'}</h2><p>Потрібне офіційне джерело CATL. Збережений запис не публікується автоматично.</p></div>{editing && <button className="admin-link" type="button" onClick={() => { setForm(blank); setEditing(false); }}>Скасувати</button>}</div>
+    <section className="admin-card"><div className="admin-section-title"><div><h2>{editing ? `Редагування чернетки · ${form.id}` : 'Нова картка продукту'}</h2><p>Потрібне офіційне джерело CATL. Збережений запис не публікується автоматично.</p></div>{editing && <button className="admin-link" type="button" onClick={() => { setForm(blank); setEditing(false); setActiveSnapshotId(''); }}>Скасувати</button>}</div>
       {error && <div className="admin-alert" role="alert">{error}</div>}{notice && <div className="admin-notice" role="status">{notice}</div>}
       <form className="pim-form" onSubmit={submit}>
         <div className="pim-fields"><label>ID / slug<input required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" minLength={2} maxLength={64} value={form.id} disabled={editing} onChange={(event) => setForm({ ...form, id: event.target.value })} placeholder="tener-h"/></label><label>Назва<input required minLength={2} maxLength={255} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}/></label><label>Сімейство<input required value={form.family} onChange={(event) => setForm({ ...form, family: event.target.value })} placeholder="TENER"/></label><label>Категорія<select required value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}><option value="" disabled>Оберіть категорію</option>{categories.map((category) => <option key={category}>{category}</option>)}</select></label><label>Тип продукту<input required value={form.productType} onChange={(event) => setForm({ ...form, productType: event.target.value })}/></label><label className="pim-wide">Офіційне джерело CATL<input required type="url" value={form.sourceUrl} onChange={(event) => setForm({ ...form, sourceUrl: event.target.value })} placeholder="https://www.catl.com/..."/><small>API приймає HTTPS-домени catl.com і catl.com.cn. Інші джерела не можуть бути джерелом істини PIM.</small></label><label className="pim-wide">Короткий опис<textarea maxLength={4000} value={form.shortDesc} onChange={(event) => setForm({ ...form, shortDesc: event.target.value })}/></label><label className="pim-wide">Ключове позиціонування<textarea maxLength={4000} value={form.highlight} onChange={(event) => setForm({ ...form, highlight: event.target.value })}/></label></div>
         <details className="pim-spec-editor"><summary>Групи характеристик (JSON)</summary><p>Характеристики зберігаються у чернетці. Перед публікацією кожне технічне твердження потребує окремого підтвердження джерелом та інженерного погодження.</p><div className="pim-fields">{fieldGroups.map(([key, label]) => <label key={key}>{label}<textarea className="pim-json" spellCheck={false} value={form[key]} onChange={(event) => setForm({ ...form, [key]: event.target.value })}/></label>)}</div></details>
+        {editing && <section className="pim-fact-editor" aria-label="Джерела технічних фактів"><div><h3>Джерело для кожної характеристики</h3><p>Вкажіть розділ і точну цитату. Сервер звіряє цитату та значення з незмінним знімком офіційної CATL-сторінки.</p></div>{!activeSnapshotId ? <div className="admin-alert">Для цієї URL ще немає знімка. Запустіть CATL Sync, оновіть список і відкрийте картку знову.</div> : <small className="pim-snapshot-id">Знімок CATL: {activeSnapshotId}</small>}{technicalFacts(form).length ? <div className="pim-fact-grid">{technicalFacts(form).map(({path,value})=>{const evidence=form.factSources[path]||{pageSection:'',excerpt:''};return <article className="pim-fact-item" key={path}><div className="pim-fact-heading"><code>{path}</code><strong>{JSON.stringify(value)}</strong></div><label>Розділ документа<input aria-label={`Розділ джерела ${path}`} value={evidence.pageSection} onChange={(event)=>setForm({...form,factSources:{...form.factSources,[path]:{...evidence,pageSection:event.target.value}}})} placeholder="Технічні характеристики"/></label><label>Точна цитата CATL<textarea aria-label={`Цитата CATL ${path}`} value={evidence.excerpt} onChange={(event)=>setForm({...form,factSources:{...form.factSources,[path]:{...evidence,excerpt:event.target.value}}})} placeholder="Вставте фрагмент, який містить це значення"/></label></article>;})}</div> : <p className="field-hint">Додайте характеристики у JSON, щоб додати джерела.</p>}</section>}
         <div className="pim-form-actions"><span className="admin-badge">Чернетка · не відображається публічно</span><button className="button" disabled={busy}>{busy ? <RotateCw size={15} className="spin-icon"/> : editing ? <Save size={15}/> : <FilePlus2 size={15}/>} {editing ? 'Зберегти ревізію' : 'Створити чернетку'}</button></div>
       </form>
     </section>

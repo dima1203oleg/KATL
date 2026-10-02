@@ -194,10 +194,34 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
     });
     assert.equal(reviewWithoutSnapshot.status, 409);
     await pool.query(
-      `INSERT INTO sync_snapshots (source_id,content_hash,raw_payload,http_status,content_type,size_bytes)
-       VALUES ($1,$2,$3,200,'text/html',12)`,
-      [`SRC-${publishProductId}`, `test-${randomUUID()}`, '<html>review evidence</html>']
+      `INSERT INTO sync_snapshots (source_id,source_url,content_hash,raw_payload,http_status,content_type,size_bytes)
+       VALUES ($1,$2,$3,$4,200,'text/html',40)`,
+      [`SRC-${publishProductId}`, 'https://www.catl.com/en/news/publication-test', `test-${randomUUID()}`, '<p>Nominal capacity: 1 MWh</p>']
     );
+    const missingFactEvidence = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/submit-review`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: '{}',
+    });
+    assert.equal(missingFactEvidence.status, 422);
+    assert.equal((await missingFactEvidence.json() as { error: string }).error, 'FACT_PROVENANCE_INCOMPLETE');
+    const invalidFactEvidence = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}`, {
+      method: 'PUT', headers: { 'content-type': 'application/json', cookie: sessionCookie },
+      body: JSON.stringify({
+        id: publishProductId, name: 'Integration publication product', family: 'TEST', category: 'Utility-scale ESS', productType: 'ESS_SYSTEM',
+        sourceUrl: 'https://www.catl.com/en/news/publication-test', energySpecs: { nominalCapacityMWh: 1 }, cellSpecs: {}, mechanicalSpecs: {}, thermalSpecs: {}, safetySpecs: {}, compatibility: {},
+        factSources: { '/energy_specs/nominalCapacityMWh': { pageSection: 'Technical specifications', excerpt: 'Nominal capacity: 2 MWh' } },
+      }),
+    });
+    assert.equal(invalidFactEvidence.status, 422);
+    assert.equal((await invalidFactEvidence.json() as { error: string }).error, 'FACT_PROVENANCE_EVIDENCE_MISMATCH');
+    const validFactEvidence = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}`, {
+      method: 'PUT', headers: { 'content-type': 'application/json', cookie: sessionCookie },
+      body: JSON.stringify({
+        id: publishProductId, name: 'Integration publication product', family: 'TEST', category: 'Utility-scale ESS', productType: 'ESS_SYSTEM',
+        sourceUrl: 'https://www.catl.com/en/news/publication-test', energySpecs: { nominalCapacityMWh: 1 }, cellSpecs: {}, mechanicalSpecs: {}, thermalSpecs: {}, safetySpecs: {}, compatibility: {},
+        factSources: { '/energy_specs/nominalCapacityMWh': { pageSection: 'Technical specifications', excerpt: 'Nominal capacity: 1 MWh' } },
+      }),
+    });
+    assert.equal(validFactEvidence.status, 200);
     const submitted = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/submit-review`, {
       method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: '{}',
     });
@@ -217,6 +241,11 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
       body: JSON.stringify({ note: 'Checked product specifications against the captured official source.' }),
     });
     assert.equal(approved.status, 200);
+    const verifiedFact = await pool.query(
+      `SELECT status,verified_by_id FROM pim_product_fact_sources WHERE product_id=$1 AND field_path='/energy_specs/nominalCapacityMWh' ORDER BY specification_revision DESC LIMIT 1`,
+      [publishProductId]
+    );
+    assert.deepEqual(verifiedFact.rows[0], { status: 'VERIFIED', verified_by_id: engineerId });
     const publicBeforePublish = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
     assert.equal(publicBeforePublish.status, 404);
     const published = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/publish`, {
@@ -229,7 +258,12 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
       `SELECT d.source_snapshot_id FROM pim_product_review_decisions d
        WHERE d.product_id=$1 AND d.decision='APPROVED' ORDER BY d.created_at DESC LIMIT 1`, [publishProductId]
     );
-    const liveProduct = await publicAfterPublish.json() as { data: { name: string } };
+    const liveProduct = await publicAfterPublish.json() as { data: { name: string; provenance: { facts: Record<string, { sourceUrl: string; pageSection: string; excerpt: string; verifiedBy: string }> } } };
+    const liveFact = liveProduct.data.provenance.facts['/energy_specs/nominalCapacityMWh'];
+    assert.equal(liveFact.sourceUrl, 'https://www.catl.com/en/news/publication-test');
+    assert.equal(liveFact.pageSection, 'Technical specifications');
+    assert.equal(liveFact.excerpt, 'Nominal capacity: 1 MWh');
+    assert.equal(liveFact.verifiedBy, 'Independent Test Engineer');
     const protectedSyncChange = `CHG-${randomUUID()}`;
     await pool.query(
       `INSERT INTO sync_changes (id,product_id,product_name,field,old_value,new_value,source_url,confidence,status,snapshot_id,evidence_excerpt)
@@ -244,7 +278,7 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
     const unchangedLiveProduct = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
     assert.equal((await unchangedLiveProduct.json() as { data: { name: string } }).data.name, liveProduct.data.name);
     const revisions = await pool.query('SELECT event FROM pim_product_revisions WHERE product_id=$1 ORDER BY revision', [publishProductId]);
-    assert.deepEqual(revisions.rows.map((row) => row.event), ['CREATED', 'SUBMITTED', 'APPROVED', 'PUBLISHED']);
+    assert.deepEqual(revisions.rows.map((row) => row.event), ['CREATED', 'UPDATED', 'SUBMITTED', 'APPROVED', 'PUBLISHED']);
 
     const calculation = await fetch(`http://127.0.0.1:${address.port}/api/v1/calculations/bess`, {
       method: 'POST', headers: { 'content-type': 'application/json' },

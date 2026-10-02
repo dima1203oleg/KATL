@@ -5,14 +5,15 @@ import { HeroBessIllustration } from './SiteShell';
 
 export function TenerProductDetailView({ product, locale = 'uk-UA' }: { product: KatlProduct; locale?: string }) {
   const root = `/${locale}`;
-  const groups: Array<[string, object]> = [
-    ['Енергетика та електрика', product.energySpecs],
-    ['Акумуляторні комірки', product.cellSpecs],
-    ['Тепловий режим', product.thermalSpecs],
-    ['Механічні параметри', product.mechanicalSpecs],
-    ['Безпека й сертифікації', product.safetySpecs],
-    ['Сумісність', product.compatibility],
+  const groups: Array<[string, string, object]> = [
+    ['Енергетика та електрика', 'energy_specs', product.energySpecs],
+    ['Акумуляторні комірки', 'cell_specs', product.cellSpecs],
+    ['Тепловий режим', 'thermal_specs', product.thermalSpecs],
+    ['Механічні параметри', 'mechanical_specs', product.mechanicalSpecs],
+    ['Безпека й сертифікації', 'safety_specs', product.safetySpecs],
+    ['Сумісність', 'compatibility', product.compatibility],
   ];
+  const factPath = (group: string, key: string) => `/${group}/${key.replace(/~/g,'~0').replace(/\//g,'~1')}`;
   return <main>
     <section className="page-hero product-page-hero"><div className="container">
       <div className="breadcrumbs"><Link href={root}>Головна</Link>　/　<Link href={`${root}/products`}>Продукція</Link>　/　{product.name}</div>
@@ -25,10 +26,10 @@ export function TenerProductDetailView({ product, locale = 'uk-UA' }: { product:
       </div>
     </div></section>
     <div className="container content-section" id="overview"><div className="section-head"><div><div className="eyebrow">Технічний профіль</div><h2>Характеристики з картки PIM</h2></div><p>Показано лише поля, які надійшли через каталог. Відсутні або не підтверджені дані не підміняються припущеннями.</p></div>
-      {groups.some(([, values]) => Object.values(values || {}).some(Boolean)) ? <div className="tile-grid">{groups.map(([title, values]) => {
+      {groups.some(([, , values]) => Object.values(values || {}).some(Boolean)) ? <div className="tile-grid">{groups.map(([title, group, values]) => {
         const rows = Object.entries(values as Record<string, unknown>).filter(([, value]) => value !== null && value !== undefined && value !== '' && (!Array.isArray(value) || value.length));
         if (!rows.length) return null;
-        return <section className="calc-card" key={title}><h2 style={{fontSize:17,marginTop:0}}>{title}</h2><table className="spec-table"><tbody>{rows.map(([key,value])=><tr key={key}><td>{key.replace(/([A-Z])/g,' $1').replace(/^./, s=>s.toUpperCase())}</td><td>{Array.isArray(value)?value.join(', '):typeof value==='object'?JSON.stringify(value):String(value)}</td></tr>)}</tbody></table></section>;
+        return <section className="calc-card" key={title}><h2 style={{fontSize:17,marginTop:0}}>{title}</h2><table className="spec-table"><tbody>{rows.map(([key,value])=>{const prefix=factPath(group,key);const sources=Object.entries(product.provenance.facts).filter(([path])=>path===prefix||path.startsWith(`${prefix}/`)).map(([,source])=>source);return <tr key={key}><td>{key.replace(/([A-Z])/g,' $1').replace(/^./, s=>s.toUpperCase())}</td><td>{Array.isArray(value)?value.join(', '):typeof value==='object'?JSON.stringify(value):String(value)}{sources.map((source,index)=><small className="fact-citation" key={`${source.sourceUrl}-${index}`}><a href={source.sourceUrl} target="_blank" rel="noreferrer">{source.pageSection} · CATL source</a><span>“{source.excerpt}”</span></small>)}</td></tr>})}</tbody></table></section>;
       })}</div> : <div className="empty-state"><ShieldCheck color="#1769d2"/><div><h3>Технічні дані ще не опубліковані</h3><p>Запитайте актуальну документацію для вашої конфігурації.</p></div></div>}
     </div>
     <section className="section section-soft"><div className="container"><div className="section-head"><div><div className="eyebrow">Документація</div><h2>Документи та сертифікати</h2></div><Link className="text-link" href={`${root}/documents?product=${encodeURIComponent(product.id)}`}>До бібліотеки документів →</Link></div><div className="empty-state"><FileText color="#1769d2"/><div><h3>Публічних файлів поки немає</h3><p>Зверніться до команди проєкту, щоб отримати доступні для вашої конфігурації документи.</p></div></div></div></section>

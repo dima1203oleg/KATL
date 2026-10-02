@@ -162,6 +162,10 @@ test('admin login opens the protected RFQ queue and records a status change', as
   await expect(draftRow.getByRole('button', { name: /На перевірку/ })).toBeDisabled();
   await draftRow.getByRole('button', { name: /Історія ревізій/ }).click();
   await expect(page.locator('.pim-revision-history')).toContainText('CREATED');
+  await draftRow.getByRole('button', { name: /Редагувати/ }).click();
+  await expect(page.getByRole('heading', { name: 'Джерело для кожної характеристики' })).toBeVisible();
+  await expect(page.getByText('Для цієї URL ще немає знімка.')).toBeVisible();
+  await page.getByRole('button', { name: 'Скасувати' }).click();
 
   await page.getByRole('button', { name: 'CATL Sync' }).click();
   await expect(page.getByRole('heading', { name: 'Офіційні джерела CATL' })).toBeVisible();

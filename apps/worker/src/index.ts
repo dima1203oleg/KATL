@@ -143,11 +143,11 @@ async function runCatlSync() {
       try {
         await client.query('BEGIN');
         const saved = await client.query(
-          `INSERT INTO sync_snapshots (source_id, content_hash, raw_payload, captured_at, http_status, content_type, body_encoding, size_bytes)
-           VALUES ($1,$2,$3,NOW(),$4,$5,$6,$7)
-           ON CONFLICT (source_id, content_hash) DO UPDATE SET captured_at = NOW()
+          `INSERT INTO sync_snapshots (source_id, content_hash, raw_payload, captured_at, http_status, content_type, body_encoding, size_bytes, source_url)
+           VALUES ($1,$2,$3,NOW(),$4,$5,$6,$7,$8)
+           ON CONFLICT (source_id, content_hash) DO UPDATE SET captured_at = NOW(), source_url = EXCLUDED.source_url
            RETURNING id`,
-          [source.id, sha256, rawPayload, response.status, contentType, bodyEncoding, bytes.byteLength]
+          [source.id, sha256, rawPayload, response.status, contentType, bodyEncoding, bytes.byteLength, source.url]
         );
         snapshotId = saved.rows[0].id;
         await client.query('UPDATE sync_sources SET last_checked = NOW(), last_hash = $1 WHERE id = $2', [sha256, source.id]);

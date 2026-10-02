@@ -14,6 +14,7 @@ import { getDatabasePool } from '../../../packages/database/src/client';
 import { getRedisClient } from '../../../packages/redis/src/index';
 import { authenticate, resolveSession, revokeSession, sessionTokenFromRequest } from './auth';
 import { aiTaskSchema, bessSizingSchema, createRfqSchema, lcosSchema, pimDraftSchema, rfqStatusSchema } from './validation';
+import { evidenceContainsFactValue, extractTechnicalFacts, normalizeSourceEvidence, sameJsonValue } from './pim-fact-provenance';
 import { QUEUE_NAMES, getPlatformQueueStats } from '../../../packages/queue/src/index';
 import { aiGateway } from '../../../src/server/ai-gateway/aiGateway';
 import { BessEngineeringCalculator, calculateLcos } from '../../../packages/calculations/src/index';
@@ -107,13 +108,19 @@ const productFromRow = (row: any) => ({
     confidence: row.confidence || 'UNVERIFIED',
     revision: row.revision || 1,
     lastUpdated: row.updated_at || '',
+    facts: row.verified_fact_sources || {},
   },
 });
 
 async function recordPimRevision(client: any, productId: string, event: string, actor: string, note: string | null = null, sourceSnapshotId: string | null = null) {
   const { rows } = await client.query(
-    `SELECT p.*, to_jsonb(s) AS specifications FROM pim_products p
-     LEFT JOIN pim_specifications s ON s.product_id = p.id WHERE p.id = $1`,
+    `SELECT p.*, to_jsonb(s) AS specifications, COALESCE(f.data,'{}'::jsonb) AS fact_sources FROM pim_products p
+     LEFT JOIN pim_specifications s ON s.product_id = p.id
+     LEFT JOIN LATERAL (
+       SELECT jsonb_object_agg(field_path,jsonb_build_object('pageSection',page_section,'excerpt',evidence_excerpt,'status',status,'sourceSnapshotId',source_snapshot_id)) AS data
+       FROM pim_product_fact_sources WHERE product_id=p.id AND specification_revision=s.specification_revision
+     ) f ON true
+     WHERE p.id = $1`,
     [productId]
   );
   const product = rows[0];
@@ -125,11 +132,101 @@ async function recordPimRevision(client: any, productId: string, event: string, 
   );
 }
 
+const SPECIFICATION_COLUMNS = {
+  energySpecs: 'energy_specs', cellSpecs: 'cell_specs', mechanicalSpecs: 'mechanical_specs',
+  thermalSpecs: 'thermal_specs', safetySpecs: 'safety_specs', compatibility: 'compatibility',
+} as const;
+
+function factsFromPimInput(input: Record<string, any>) {
+  const groups = Object.fromEntries(Object.entries(SPECIFICATION_COLUMNS).map(([key, column]) => [column, input[key] ?? input[column] ?? {}]));
+  return extractTechnicalFacts(groups);
+}
+
+async function storePimFactSources(client: any, productId: string, specRevision: number, input: Record<string, any>) {
+  const factSources = input.factSources || {};
+  const facts = factsFromPimInput(input);
+  const factByPath = new Map(facts.map((fact) => [fact.path, fact]));
+  const submittedPaths = Object.keys(factSources);
+  const unknownPaths = submittedPaths.filter((path) => !factByPath.has(path));
+  if (unknownPaths.length) return { error: 'FACT_PROVENANCE_UNKNOWN_FIELD', paths: unknownPaths.slice(0, 50) };
+  if (!submittedPaths.length) return { facts, saved: 0, error: null };
+
+  const snapshot = await client.query(
+    `SELECT ss.id,ss.raw_payload,ss.body_encoding,ss.source_url
+     FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
+     WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.source_url=$2 AND ss.http_status BETWEEN 200 AND 299
+     ORDER BY ss.captured_at DESC LIMIT 1`,
+    [productId, input.sourceUrl]
+  );
+  if (!snapshot.rowCount) return { error: 'FACT_SOURCE_SNAPSHOT_REQUIRED', paths: submittedPaths.slice(0, 50) };
+  const source = snapshot.rows[0];
+  if (source.body_encoding !== 'utf8' || typeof source.raw_payload !== 'string') {
+    return { error: 'FACT_SOURCE_TEXT_UNAVAILABLE', paths: submittedPaths.slice(0, 50) };
+  }
+  const sourceText = normalizeSourceEvidence(source.raw_payload);
+  const invalidPaths: string[] = [];
+  for (const path of submittedPaths) {
+    const fact = factByPath.get(path)!;
+    const evidence = factSources[path];
+    const excerpt = String(evidence.excerpt || '').trim();
+    const normalizedExcerpt = normalizeSourceEvidence(excerpt);
+    if (normalizedExcerpt.length < 5 || !sourceText.includes(normalizedExcerpt) || !evidenceContainsFactValue(excerpt, fact.value)) invalidPaths.push(path);
+  }
+  if (invalidPaths.length) return { error: 'FACT_PROVENANCE_EVIDENCE_MISMATCH', paths: invalidPaths.slice(0, 50) };
+
+  for (const path of submittedPaths) {
+    const fact = factByPath.get(path)!;
+    const evidence = factSources[path];
+    await client.query(
+      `INSERT INTO pim_product_fact_sources (product_id,specification_revision,field_path,value_snapshot,source_snapshot_id,page_section,evidence_excerpt,status,verified_by_id,verified_at)
+       VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,'PENDING',NULL,NULL)`,
+      [productId,specRevision,path,JSON.stringify(fact.value),source.id,evidence.pageSection.trim(),evidence.excerpt.trim()]
+    );
+  }
+  return { facts, saved: submittedPaths.length, error: null };
+}
+
+async function checkPimFactCoverage(client: any, productId: string, specRevision: number, input: Record<string, any>, snapshotId: string, requireVerifiedBy?: string) {
+  const expected = factsFromPimInput(input);
+  const rows = await client.query(
+    `SELECT field_path,value_snapshot,source_snapshot_id,status,verified_by_id
+     FROM pim_product_fact_sources WHERE product_id=$1 AND specification_revision=$2`,
+    [productId,specRevision]
+  );
+  const byPath = new Map(rows.rows.map((row: any) => [row.field_path,row]));
+  const missing: string[] = [];
+  const stale: string[] = [];
+  for (const fact of expected) {
+    const row: any = byPath.get(fact.path);
+    if (!row) { missing.push(fact.path); continue; }
+    if (!sameJsonValue(row.value_snapshot,fact.value) || row.source_snapshot_id !== snapshotId
+      || (requireVerifiedBy && (row.status !== 'VERIFIED' || row.verified_by_id !== requireVerifiedBy))) stale.push(fact.path);
+  }
+  return { total: expected.length, missing, stale };
+}
+
+function sendFactProvenanceError(res: Response, result: { error: string; paths: string[] }) {
+  const messages: Record<string,string> = {
+    FACT_PROVENANCE_UNKNOWN_FIELD: 'Джерело вказане для характеристики, якої немає в цій картці.',
+    FACT_SOURCE_SNAPSHOT_REQUIRED: 'Спершу отримайте актуальний знімок офіційної сторінки CATL.',
+    FACT_SOURCE_TEXT_UNAVAILABLE: 'Для цього PDF або джерела ще немає текстового знімка для перевірки цитат.',
+    FACT_PROVENANCE_EVIDENCE_MISMATCH: 'Цитату не знайдено у знімку CATL або в ній немає значення характеристики.',
+  };
+  return res.status(422).json({ error: result.error, message: messages[result.error] || 'Не вдалося перевірити джерело характеристики.', paths: result.paths });
+}
+
 const PRODUCT_SELECT = `SELECT p.*, s.energy_specs, s.cell_specs, s.mechanical_specs,
   s.thermal_specs, s.safety_specs, s.compatibility,
+  COALESCE(facts.data,'{}'::jsonb) AS verified_fact_sources,
   t.name AS localized_name, t.short_desc AS localized_short_desc, t.highlight AS localized_highlight,
   t.specifications AS localized_specs, t.translation_status, t.source_revision
   FROM pim_products p JOIN pim_specifications s ON s.product_id = p.id
+  LEFT JOIN LATERAL (
+    SELECT jsonb_object_agg(f.field_path,jsonb_build_object('sourceUrl',ss.source_url,'pageSection',f.page_section,'excerpt',f.evidence_excerpt,'verifiedAt',f.verified_at,'verifiedBy',u.name)) AS data
+    FROM pim_product_fact_sources f JOIN sync_snapshots ss ON ss.id=f.source_snapshot_id
+    LEFT JOIN users u ON u.id=f.verified_by_id
+    WHERE f.product_id=p.id AND f.specification_revision=s.specification_revision AND f.status='VERIFIED'
+  ) facts ON true
   LEFT JOIN pim_product_translations t ON t.product_id = p.id AND t.locale = $1`;
 
 const canonicalLocale = (value: unknown) => {
@@ -342,13 +439,18 @@ app.get('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req:
   const { rows } = await getDatabasePool().query(
     `SELECT p.id, p.name, p.family, p.category, p.product_type, p.short_desc, p.highlight, p.status, p.source_url,
       p.verified_at, p.verified_by, p.confidence, p.revision, p.updated_at, evidence.snapshot_id AS latest_source_snapshot_id,
+      COALESCE(facts.data,'{}'::jsonb) AS fact_sources,
       s.energy_specs, s.cell_specs, s.mechanical_specs, s.thermal_specs, s.safety_specs, s.compatibility
      FROM pim_products p JOIN pim_specifications s ON s.product_id = p.id
      LEFT JOIN LATERAL (
        SELECT ss.id AS snapshot_id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
-       WHERE src.product_id=p.id AND src.enabled=true AND src.url=p.source_url AND ss.http_status BETWEEN 200 AND 299
+       WHERE src.product_id=p.id AND src.enabled=true AND src.url=p.source_url AND ss.source_url=p.source_url AND ss.http_status BETWEEN 200 AND 299
        ORDER BY ss.captured_at DESC LIMIT 1
      ) evidence ON true
+     LEFT JOIN LATERAL (
+       SELECT jsonb_object_agg(field_path,jsonb_build_object('pageSection',page_section,'excerpt',evidence_excerpt,'status',status,'sourceSnapshotId',source_snapshot_id)) AS data
+       FROM pim_product_fact_sources WHERE product_id=p.id AND specification_revision=s.specification_revision
+     ) facts ON true
      WHERE ($1::text = '' OR p.name ILIKE '%' || $1 || '%' OR p.id ILIKE '%' || $1 || '%' OR p.family ILIKE '%' || $1 || '%')
        AND ($2::text IS NULL OR p.status = $2)
      ORDER BY p.updated_at DESC LIMIT 500`,
@@ -380,6 +482,8 @@ app.post('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req
        VALUES ($1,$2,$3,'OFFICIAL_WEB',$4,true)`,
       [`SRC-${input.id}`, input.name, input.sourceUrl, input.id]
     );
+    const factResult = await storePimFactSources(client, input.id, 1, input);
+    if (factResult.error) { await client.query('ROLLBACK'); return sendFactProvenanceError(res, factResult); }
     await client.query(
       `INSERT INTO audit_logs (id, action, entity, entity_id, actor, details)
        VALUES ($1,'PIM_DRAFT_CREATED','Product',$2,$3,$4::jsonb)`,
@@ -403,7 +507,7 @@ app.put('/api/v1/admin/products/:id', requireRoles(...PIM_EDITOR_ROLES), async (
   const client = await getDatabasePool().connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query('SELECT status, revision FROM pim_products WHERE id = $1 FOR UPDATE', [input.id]);
+    const current = await client.query('SELECT p.status,p.revision,s.specification_revision FROM pim_products p JOIN pim_specifications s ON s.product_id=p.id WHERE p.id = $1 FOR UPDATE OF p,s', [input.id]);
     if (!current.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
     if (!['DRAFT', 'REVIEW'].includes(current.rows[0].status)) {
       await client.query('ROLLBACK');
@@ -417,15 +521,18 @@ app.put('/api/v1/admin/products/:id', requireRoles(...PIM_EDITOR_ROLES), async (
     );
     await client.query(
       `UPDATE pim_specifications SET energy_specs=$1::jsonb,cell_specs=$2::jsonb,mechanical_specs=$3::jsonb,thermal_specs=$4::jsonb,
-       safety_specs=$5::jsonb,compatibility=$6::jsonb,updated_at=NOW() WHERE product_id=$7`,
+       safety_specs=$5::jsonb,compatibility=$6::jsonb,specification_revision=specification_revision+1,updated_at=NOW() WHERE product_id=$7`,
       [JSON.stringify(input.energySpecs), JSON.stringify(input.cellSpecs), JSON.stringify(input.mechanicalSpecs), JSON.stringify(input.thermalSpecs), JSON.stringify(input.safetySpecs), JSON.stringify(input.compatibility), input.id]
     );
+    const specificationRevision = Number(current.rows[0].specification_revision) + 1;
     await client.query(
       `INSERT INTO sync_sources (id,name,url,source_type,product_id,enabled)
        VALUES ($1,$2,$3,'OFFICIAL_WEB',$4,true)
        ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,product_id=EXCLUDED.product_id,enabled=true`,
       [`SRC-${input.id}`, input.name, input.sourceUrl, input.id]
     );
+    const factResult = await storePimFactSources(client,input.id,specificationRevision,input);
+    if (factResult.error) { await client.query('ROLLBACK'); return sendFactProvenanceError(res, factResult); }
     await client.query(
       `INSERT INTO audit_logs (id, action, entity, entity_id, actor, details)
        VALUES ($1,'PIM_DRAFT_UPDATED','Product',$2,$3,$4::jsonb)`,
@@ -456,23 +563,28 @@ app.post('/api/v1/admin/products/:id/submit-review', requireRoles(...PIM_EDITOR_
   try {
     await client.query('BEGIN');
     const current = await client.query(
-      `SELECT p.id,p.status,p.revision,p.source_url,s.energy_specs,s.cell_specs,s.mechanical_specs,s.thermal_specs,s.safety_specs,s.compatibility
+      `SELECT p.id,p.status,p.revision,p.source_url,s.specification_revision,s.energy_specs,s.cell_specs,s.mechanical_specs,s.thermal_specs,s.safety_specs,s.compatibility
        FROM pim_products p JOIN pim_specifications s ON s.product_id=p.id WHERE p.id=$1 FOR UPDATE OF p`,
       [id]
     );
     const product = current.rows[0];
     if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
     if (product.status !== 'DRAFT') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_NOT_DRAFT', message: 'На перевірку можна подати лише чернетку.' }); }
-    const hasSpecs = ['energy_specs','cell_specs','mechanical_specs','thermal_specs','safety_specs','compatibility']
-      .some((key) => product[key] && Object.keys(product[key]).length > 0);
-    if (!hasSpecs) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'PRODUCT_SPECS_REQUIRED', message: 'Додайте перевірювані характеристики перед поданням на перевірку.' }); }
+    const technicalGroups = Object.fromEntries(['energy_specs','cell_specs','mechanical_specs','thermal_specs','safety_specs','compatibility'].map((key) => [key,product[key]]));
+    const technicalFacts = extractTechnicalFacts(technicalGroups);
+    if (!technicalFacts.length) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'PRODUCT_SPECS_REQUIRED', message: 'Додайте перевірювані характеристики перед поданням на перевірку.' }); }
     const snapshot = await client.query(
       `SELECT ss.id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
-       WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.http_status BETWEEN 200 AND 299
+       WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.source_url=$2 AND ss.http_status BETWEEN 200 AND 299
        ORDER BY ss.captured_at DESC LIMIT 1`,
       [id, product.source_url]
     );
     if (!snapshot.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'OFFICIAL_SOURCE_NOT_FETCHED', message: 'Спочатку виконайте успішне отримання офіційного джерела CATL.' }); }
+    const coverage = await checkPimFactCoverage(client,id,Number(product.specification_revision),technicalGroups,snapshot.rows[0].id);
+    if (coverage.missing.length || coverage.stale.length) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({ error: 'FACT_PROVENANCE_INCOMPLETE', message: 'Кожне технічне значення має посилатися на цитату з актуального знімка CATL.', missing: coverage.missing, stale: coverage.stale });
+    }
     const revision = Number(product.revision) + 1;
     await client.query("UPDATE pim_products SET status='REVIEW',revision=$1,updated_at=NOW() WHERE id=$2", [revision, id]);
     await client.query(
@@ -495,7 +607,10 @@ app.post('/api/v1/admin/products/:id/review/approve', requireRoles('SUPER_ADMIN'
   const client = await getDatabasePool().connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query('SELECT id,status,revision,source_url FROM pim_products WHERE id=$1 FOR UPDATE', [id]);
+    const current = await client.query(
+      `SELECT p.id,p.status,p.revision,p.source_url,s.specification_revision,s.energy_specs,s.cell_specs,s.mechanical_specs,s.thermal_specs,s.safety_specs,s.compatibility
+       FROM pim_products p JOIN pim_specifications s ON s.product_id=p.id WHERE p.id=$1 FOR UPDATE OF p,s`, [id]
+    );
     const product = current.rows[0];
     if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
     if (product.status !== 'REVIEW') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_NOT_IN_REVIEW' }); }
@@ -506,15 +621,26 @@ app.post('/api/v1/admin/products/:id/review/approve', requireRoles('SUPER_ADMIN'
     }
     const snapshot = await client.query(
       `SELECT ss.id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
-       WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.http_status BETWEEN 200 AND 299
+       WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.source_url=$2 AND ss.http_status BETWEEN 200 AND 299
        ORDER BY ss.captured_at DESC LIMIT 1`,
       [id, product.source_url]
     );
     if (!snapshot.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'OFFICIAL_SOURCE_NOT_FETCHED' }); }
+    const technicalGroups = Object.fromEntries(['energy_specs','cell_specs','mechanical_specs','thermal_specs','safety_specs','compatibility'].map((key) => [key,product[key]]));
+    const coverage = await checkPimFactCoverage(client,id,Number(product.specification_revision),technicalGroups,snapshot.rows[0].id);
+    if (coverage.total === 0 || coverage.missing.length || coverage.stale.length) {
+      await client.query('ROLLBACK');
+      return res.status(422).json({ error: 'FACT_PROVENANCE_INCOMPLETE', message: 'Перед погодженням підтвердьте кожне технічне значення цитатою з актуального знімка CATL.', missing: coverage.missing, stale: coverage.stale });
+    }
     await client.query(
-      `INSERT INTO pim_product_review_decisions (product_id,revision,source_snapshot_id,reviewer,decision,note)
-       VALUES ($1,$2,$3,$4,'APPROVED',$5)`,
-      [id, product.revision, snapshot.rows[0].id, actor.name, note]
+      `INSERT INTO pim_product_review_decisions (product_id,revision,source_snapshot_id,reviewer,reviewer_id,decision,note)
+       VALUES ($1,$2,$3,$4,$5,'APPROVED',$6)`,
+      [id, product.revision, snapshot.rows[0].id, actor.name, actor.id, note]
+    );
+    await client.query(
+      `UPDATE pim_product_fact_sources SET status='VERIFIED',verified_by_id=$1,verified_at=NOW()
+       WHERE product_id=$2 AND specification_revision=$3 AND source_snapshot_id=$4`,
+      [actor.id,id,product.specification_revision,snapshot.rows[0].id]
     );
     const revision = Number(product.revision) + 1;
     await client.query(
@@ -541,18 +667,18 @@ app.post('/api/v1/admin/products/:id/review/reject', requireRoles('SUPER_ADMIN',
   const client = await getDatabasePool().connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query('SELECT id,status,revision FROM pim_products WHERE id=$1 FOR UPDATE', [id]);
+    const current = await client.query('SELECT id,status,revision,source_url FROM pim_products WHERE id=$1 FOR UPDATE', [id]);
     const product = current.rows[0];
     if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
     if (product.status !== 'REVIEW') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_NOT_IN_REVIEW' }); }
     const sourceSnapshot = await client.query(
       `SELECT ss.id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
-       WHERE src.product_id=$1 AND ss.http_status BETWEEN 200 AND 299 ORDER BY ss.captured_at DESC LIMIT 1`, [id]
+       WHERE src.product_id=$1 AND src.url=$2 AND ss.source_url=$2 AND ss.http_status BETWEEN 200 AND 299 ORDER BY ss.captured_at DESC LIMIT 1`, [id,product.source_url]
     );
     const snapshotId = sourceSnapshot.rows[0]?.id || null;
     if (snapshotId) await client.query(
-      `INSERT INTO pim_product_review_decisions (product_id,revision,source_snapshot_id,reviewer,decision,note)
-       VALUES ($1,$2,$3,$4,'REJECTED',$5)`, [id, product.revision, snapshotId, actor.name, note]
+      `INSERT INTO pim_product_review_decisions (product_id,revision,source_snapshot_id,reviewer,reviewer_id,decision,note)
+       VALUES ($1,$2,$3,$4,$5,'REJECTED',$6)`, [id, product.revision, snapshotId, actor.name, actor.id, note]
     );
     const revision = Number(product.revision) + 1;
     await client.query("UPDATE pim_products SET status='DRAFT',revision=$1,updated_at=NOW() WHERE id=$2", [revision, id]);
@@ -571,17 +697,26 @@ app.post('/api/v1/admin/products/:id/publish', requireRoles('SUPER_ADMIN', 'ADMI
   const client = await getDatabasePool().connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query('SELECT id,status,revision,source_url,verified_at,verified_by FROM pim_products WHERE id=$1 FOR UPDATE', [id]);
+    const current = await client.query(
+      `SELECT p.id,p.status,p.revision,p.source_url,p.verified_at,p.verified_by,s.specification_revision,s.energy_specs,s.cell_specs,s.mechanical_specs,s.thermal_specs,s.safety_specs,s.compatibility
+       FROM pim_products p JOIN pim_specifications s ON s.product_id=p.id WHERE p.id=$1 FOR UPDATE OF p,s`, [id]
+    );
     const product = current.rows[0];
     if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
     if (product.status !== 'APPROVED') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_REQUIRES_APPROVAL', message: 'Публікувати можна лише погоджену інженером ревізію.' }); }
     const decision = await client.query(
-      `SELECT d.revision,d.source_snapshot_id,ss.http_status FROM pim_product_review_decisions d
+      `SELECT d.revision,d.source_snapshot_id,d.reviewer_id,ss.http_status FROM pim_product_review_decisions d
        JOIN sync_snapshots ss ON ss.id=d.source_snapshot_id
        WHERE d.product_id=$1 AND d.decision='APPROVED' ORDER BY d.created_at DESC LIMIT 1`, [id]
     );
-    if (!decision.rowCount || Number(decision.rows[0].revision) !== Number(product.revision) - 1 || decision.rows[0].http_status < 200 || decision.rows[0].http_status >= 300 || !product.source_url || !product.verified_at || !product.verified_by) {
+    if (!decision.rowCount || !decision.rows[0].reviewer_id || Number(decision.rows[0].revision) !== Number(product.revision) - 1 || decision.rows[0].http_status < 200 || decision.rows[0].http_status >= 300 || !product.source_url || !product.verified_at || !product.verified_by) {
       await client.query('ROLLBACK'); return res.status(409).json({ error: 'PUBLICATION_EVIDENCE_INVALID', message: 'Не знайдено актуального погодження з успішним знімком офіційного джерела.' });
+    }
+    const technicalGroups = Object.fromEntries(['energy_specs','cell_specs','mechanical_specs','thermal_specs','safety_specs','compatibility'].map((key) => [key,product[key]]));
+    const factCoverage = await checkPimFactCoverage(client,id,Number(product.specification_revision),technicalGroups,decision.rows[0].source_snapshot_id,decision.rows[0].reviewer_id || undefined);
+    if (factCoverage.total === 0 || factCoverage.missing.length || factCoverage.stale.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'PUBLICATION_FACT_PROVENANCE_INVALID', message: 'Опублікована картка має містити перевірені джерела для кожної технічної характеристики.', missing: factCoverage.missing, stale: factCoverage.stale });
     }
     const revision = Number(product.revision) + 1;
     await client.query("UPDATE pim_products SET status='PUBLISHED',revision=$1,updated_at=NOW() WHERE id=$2", [revision, id]);

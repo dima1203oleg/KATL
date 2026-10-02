@@ -2,7 +2,9 @@
 
 Date: 2026-10-02
 Branch: `main`
-Scope: repository implementation, local runtime and the GitHub Actions run for commit `82eb7f9`. This report does not certify production readiness.
+Scope: implementation based on GitHub `main` commit `d6d1030` plus uncommitted milestone `0016` on 2026-10-02. This report does not certify production readiness.
+
+Latest verification delta: migration `0016` applied successfully to local Compose PostgreSQL; unit tests pass 15/15, PostgreSQL integration tests pass 8/8 including fact evidence rejection/approval/public citation, `npm run lint` and API/worker/web production builds pass. Chromium and Firefox acceptance pass 18/18 including the PIM citation workflow’s no-snapshot UI state. Local WebKit could not launch because this environment lacks GTK 4, Graphene, HarfBuzz ICU, Manette, Hyphen and GLESv2 libraries. GitHub Actions for this source change is pending.
 
 ## Acceptance rules and test environment
 
@@ -13,16 +15,16 @@ Checks completed for the current web implementation:
 | Check | Result | Evidence / limit |
 |---|---|---|
 | TypeScript and workspace typecheck | PASS | `npm run lint` |
-| Unit, API and PostgreSQL integration tests | PASS | Local unit suite: 11/11. Current API PostgreSQL suite: 8/8, including source-gated PIM approval/publication and persisted calculation-to-RFQ association. GitHub Actions unit/integration step passed. |
+| Unit, API and PostgreSQL integration tests | PASS | Local unit suite: 15/15. Current API PostgreSQL suite: 8/8, including missing/incorrect per-fact evidence rejection, engineer verification, public fact citation, source-gated publication and persisted calculation-to-RFQ association. GitHub Actions for milestone `0016` is pending. |
 | Next.js production build | PASS | `npm run build:web` |
 | API build | PASS | `npm run build:api` |
 | Worker build | PASS | included in canonical `npm run build` |
-| Production browser journeys | PARTIAL PASS | Against the current local Next/API runtime, Playwright Chromium 9/9 and Firefox 9/9 pass (18/18). Includes geo/preference routing, localized HTML, public RFQ, persisted calculator → RFQ with unchanged values, protected admin login/status change, PIM draft creation, source registration, disabled pre-sync review, revision history, archive/source disable, logout, 404 and responsive checks. Customer/partner flows remain absent. |
+| Production browser journeys | PARTIAL PASS | Against the current local Next/API runtime, Playwright Chromium 9/9 and Firefox 9/9 pass (18/18). Includes geo/preference routing, localized HTML, public RFQ, persisted calculator → RFQ with unchanged values, protected admin login/status change, PIM draft creation, source registration, citation editor and no-snapshot warning, disabled pre-sync review, revision history, archive/source disable, logout, 404 and responsive checks. Customer/partner flows remain absent. |
 | Responsive viewport checks | PARTIAL PASS | Home has no horizontal overflow at 320, 375, 390, 430, 768, 1024, 1366 and 1920 px in Chromium and Firefox. Foldable, 200% zoom, orientation, catalog/product responsive matrix, and real device checks are pending. |
-| WebKit/Safari | CI PASS; physical Safari untested | Local launch lacks required WebKit OS libraries. GitHub Actions browser acceptance passed on Chromium, Firefox and WebKit. No physical iPhone/iPad Safari verification yet. |
-| PostgreSQL-backed journeys | PASS (local only) | Migrations `0001`–`0015` ran successfully on a fresh temporary PostgreSQL database; current API tests ran against local Compose PostgreSQL. A calculation snapshot was saved and attached to its RFQ. Earlier Compose acceptance stored a browser RFQ, dispatched it to local Mailpit and recorded audit; CRM remained `PENDING` because no endpoint is configured. |
+| WebKit/Safari | BLOCKED locally; physical Safari untested | Local launch lacks GTK 4, Graphene, HarfBuzz ICU, Manette, Hyphen and GLESv2. Previous GitHub Actions acceptance passed WebKit before this source change; the current commit must rerun it. No physical iPhone/iPad Safari verification yet. |
+| PostgreSQL-backed journeys | PASS (local only) | Migrations `0001`–`0015` passed on a fresh temporary PostgreSQL database; `0016` applied to local Compose PostgreSQL. Current API tests ran against local Compose PostgreSQL. A calculation snapshot was saved and attached to its RFQ. Earlier Compose acceptance stored a browser RFQ, dispatched it to local Mailpit and recorded audit; CRM remained `PENDING` because no endpoint is configured. |
 | Docker/Compose production images | PASS in CI; local rebuild blocked | GitHub Actions built the current API, worker and web images. Local Docker rebuild ran out of disk. No staging deployment was performed. |
-| Actual PIM data and source review | FAIL / unavailable | The workflow supports human approval against a successful snapshot, but no real CATL product/document has been reviewed. Public catalog correctly remains empty. A page snapshot and manual note are not claim-level verification. |
+| Actual PIM data and source review | FAIL / unavailable | The workflow now requires per-fact excerpts from the latest successful HTML snapshot and exposes verified citations publicly. No real CATL product/document has been reviewed; PDF text extraction is not implemented. Public catalog correctly remains empty. |
 | Supplied visual reference | PARTIAL | Public home, product list and compare visual language now uses the supplied dark energy hero/navigation, white catalog, dark solution/engineering blocks and industrial schematic art. Exact image assets are not available; unverified specs and demo metrics were not copied. Admin has a separate compact control-center design; customer/partner screens are absent. |
 | Locale detection | PASS (unit + HTTP smoke) | Five unit cases pass. Production server returned `/` redirects: UA→`/uk-UA`, CN→`/zh-CN`, browser `zh-CN`→`/zh-CN`, saved EN preference→`/en`; country selection consumes only Vercel/Cloudflare edge headers. |
 | Locale coverage | FAIL / partial | Localized home pages exist; approved translated product reads are gated by PIM. Most public routes are UK-only; `/zh-CN/bess` currently returns 404. Full UK/EN/ZH page parity and semantic translations remain blocking. |
@@ -86,7 +88,7 @@ Responsive/browser gates are partial. Chromium and Firefox exercise the responsi
 | Requested admin area | Status | Blocker |
 |---|---|---|
 | Admin login/dashboard | PARTIAL | Protected role-aware Next admin entry, login/logout, API-backed readiness/RFQ/sync metrics and noindex metadata exist and pass Chromium/Firefox. User/role management and broad operational dashboards remain missing. |
-| Products/editor/categories/families/revisions | PARTIAL | Authorized PIM listing, allowlisted category draft create/edit/archive, CATL HTTPS source-domain validation, automatic Sync source registration, archive/source disable, revision increment and audit work. There is no publish approval, fact-level provenance, immutable revision history, family/spec definitions, translation or media workflow. |
+| Products/editor/categories/families/revisions | PARTIAL | PIM listing, draft create/edit/archive, Sync source registration, revision history, source-cited fact editor and review→approval→publication path are implemented. API integration verifies facts against the exact source snapshot and exposes approved citations. No browser acceptance of the new editor, staged published-product revisions, family/spec definitions, translation or media workflow. |
 | Sync sources/runs/review | PARTIAL | Admin lists registered sources and can enqueue sync and approve/reject pending changes with old/new values, evidence excerpt and source link. Source registry editing, full field diffs, source snapshot object storage, rollback, PDF extraction and verified live CATL acceptance remain incomplete. |
 | Documents/RAG | FAIL | No object storage, processing pipeline, embeddings, retrieval, or citations. |
 | CMS, translations, glossary, translation memory | FAIL | No review workflows, translation memory, glossary editor, or publish/outdated lifecycle. |

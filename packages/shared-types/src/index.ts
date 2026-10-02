@@ -59,6 +59,7 @@ export interface ProductProvenance {
   confidence: 'OFFICIAL_CATL' | 'DISTRIBUTOR_VERIFIED' | 'PRE_RELEASE' | 'UNVERIFIED';
   revision: number;
   lastUpdated: string;
+  facts: Record<string, { sourceUrl: string; pageSection: string; excerpt: string; verifiedAt: string; verifiedBy: string }>;
 }
 
 export interface KatlProduct {
