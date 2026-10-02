@@ -439,6 +439,8 @@ app.get('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req:
   const { rows } = await getDatabasePool().query(
     `SELECT p.id, p.name, p.family, p.category, p.product_type, p.short_desc, p.highlight, p.status, p.source_url,
       p.verified_at, p.verified_by, p.confidence, p.revision, p.updated_at, evidence.snapshot_id AS latest_source_snapshot_id,
+      staged.id AS staged_revision_id, staged.status AS staged_revision_status, staged.base_revision AS staged_base_revision,
+      staged.created_by_id AS staged_created_by_id,
       COALESCE(facts.data,'{}'::jsonb) AS fact_sources,
       s.energy_specs, s.cell_specs, s.mechanical_specs, s.thermal_specs, s.safety_specs, s.compatibility
      FROM pim_products p JOIN pim_specifications s ON s.product_id = p.id
@@ -447,6 +449,11 @@ app.get('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req:
        WHERE src.product_id=p.id AND src.enabled=true AND src.url=p.source_url AND ss.source_url=p.source_url AND ss.http_status BETWEEN 200 AND 299
        ORDER BY ss.captured_at DESC LIMIT 1
      ) evidence ON true
+     LEFT JOIN LATERAL (
+       SELECT id,status,base_revision,created_by_id FROM pim_product_staged_revisions sr
+       WHERE sr.product_id=p.id AND sr.status IN ('DRAFT','REVIEW','APPROVED')
+       ORDER BY sr.created_at DESC LIMIT 1
+     ) staged ON true
      LEFT JOIN LATERAL (
        SELECT jsonb_object_agg(field_path,jsonb_build_object('pageSection',page_section,'excerpt',evidence_excerpt,'status',status,'sourceSnapshotId',source_snapshot_id)) AS data
        FROM pim_product_fact_sources WHERE product_id=p.id AND specification_revision=s.specification_revision
@@ -724,6 +731,243 @@ app.post('/api/v1/admin/products/:id/publish', requireRoles('SUPER_ADMIN', 'ADMI
     await recordPimRevision(client,id,'PUBLISHED',actor.name,note,decision.rows[0].source_snapshot_id);
     await client.query('COMMIT');
     return res.json({ success: true, data: { id, status: 'PUBLISHED', revision } });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+// Published product corrections are isolated from the live PIM row until an
+// engineer has reviewed the cited source and an administrator explicitly publishes.
+app.post('/api/v1/admin/products/:id/staged-revisions', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const parsed = pimDraftSchema.safeParse({ ...req.body, id: req.params.id });
+  if (!parsed.success) return res.status(400).json({ error: 'VALIDATION_ERROR', issues: parsed.error.flatten() });
+  const input = parsed.data;
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id,status,revision FROM pim_products WHERE id=$1 FOR UPDATE', [input.id]);
+    if (!current.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
+    if (current.rows[0].status !== 'PUBLISHED') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_NOT_PUBLISHED' }); }
+    const active = await client.query("SELECT id FROM pim_product_staged_revisions WHERE product_id=$1 AND status IN ('DRAFT','REVIEW','APPROVED')", [input.id]);
+    if (active.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'STAGED_REVISION_EXISTS', revisionId: active.rows[0].id }); }
+    const staged = await client.query(
+      `INSERT INTO pim_product_staged_revisions (product_id,base_revision,payload,created_by_id)
+       VALUES ($1,$2,$3::jsonb,$4) RETURNING id,status,base_revision,created_at`,
+      [input.id, current.rows[0].revision, JSON.stringify(input), actor.id]
+    );
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_STAGED_REVISION_CREATED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`, input.id, actor.name, JSON.stringify({ stagedRevisionId: staged.rows[0].id, baseRevision: current.rows[0].revision })]);
+    await client.query('COMMIT');
+    return res.status(201).json({ data: staged.rows[0] });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    if (error?.code === '23505') return res.status(409).json({ error: 'STAGED_REVISION_EXISTS' });
+    throw error;
+  } finally { client.release(); }
+});
+
+app.put('/api/v1/admin/products/:id/staged-revisions/:revisionId', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const parsed = pimDraftSchema.safeParse({ ...req.body, id: req.params.id });
+  if (!parsed.success) return res.status(400).json({ error: 'VALIDATION_ERROR', issues: parsed.error.flatten() });
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const updated = await client.query(
+      `UPDATE pim_product_staged_revisions SET payload=$1::jsonb,updated_at=NOW()
+       WHERE id=$2 AND product_id=$3 AND status='DRAFT' RETURNING id,status,base_revision,updated_at`,
+      [JSON.stringify(parsed.data), req.params.revisionId, req.params.id]
+    );
+    if (!updated.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'STAGED_REVISION_NOT_EDITABLE' }); }
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_STAGED_REVISION_UPDATED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`,req.params.id,actor.name,JSON.stringify({ stagedRevisionId: req.params.revisionId, editor: actor.id })]);
+    await client.query('COMMIT');
+    return res.json({ data: updated.rows[0] });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.get('/api/v1/admin/products/:id/staged-revisions/:revisionId', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const { rows } = await getDatabasePool().query(
+    'SELECT id,status,base_revision,payload,source_snapshot_id,created_by_id,reviewer_id,review_note,created_at,updated_at,published_at FROM pim_product_staged_revisions WHERE id=$1 AND product_id=$2',
+    [req.params.revisionId, req.params.id]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'STAGED_REVISION_NOT_FOUND' });
+  return res.json({ data: rows[0] });
+});
+
+app.post('/api/v1/admin/products/:id/staged-revisions/:revisionId/cancel', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE pim_product_staged_revisions SET status='CANCELLED',updated_at=NOW()
+       WHERE id=$1 AND product_id=$2 AND status='DRAFT'
+         AND (created_by_id=$3 OR $4::boolean)
+       RETURNING id,status,base_revision`,
+      [req.params.revisionId,req.params.id,actor.id,['SUPER_ADMIN','ADMIN'].includes(actor.role)]
+    );
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'STAGED_REVISION_NOT_CANCELLABLE', message: 'Скасувати можна лише власну staged-чернетку або чернетку адміністратор може скасувати незалежно від автора.' });
+    }
+    await client.query(
+      `INSERT INTO audit_logs (id,action,entity,entity_id,actor,details)
+       VALUES ($1,'PIM_STAGED_REVISION_CANCELLED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`,req.params.id,actor.name,JSON.stringify({ stagedRevisionId: result.rows[0].id, baseRevision: result.rows[0].base_revision })]
+    );
+    await client.query('COMMIT');
+    return res.json({ data: result.rows[0] });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.post('/api/v1/admin/products/:id/staged-revisions/:revisionId/submit-review', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `SELECT sr.*,p.status AS product_status,p.revision AS live_revision FROM pim_product_staged_revisions sr
+       JOIN pim_products p ON p.id=sr.product_id WHERE sr.id=$1 AND sr.product_id=$2 FOR UPDATE OF sr,p`,
+      [req.params.revisionId, req.params.id]
+    );
+    const staged = result.rows[0];
+    if (!staged) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'STAGED_REVISION_NOT_FOUND' }); }
+    if (staged.status !== 'DRAFT') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'STAGED_REVISION_NOT_DRAFT' }); }
+    if (staged.product_status !== 'PUBLISHED' || Number(staged.live_revision) !== Number(staged.base_revision)) {
+      await client.query("UPDATE pim_product_staged_revisions SET status='SUPERSEDED',updated_at=NOW() WHERE id=$1", [staged.id]);
+      await client.query('COMMIT'); return res.status(409).json({ error: 'STAGED_REVISION_BASE_CHANGED' });
+    }
+    const input = staged.payload;
+    const snapshot = await client.query(
+      `SELECT ss.id,ss.raw_payload,ss.body_encoding FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
+       WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.source_url=$2 AND ss.http_status BETWEEN 200 AND 299
+       ORDER BY ss.captured_at DESC LIMIT 1`, [req.params.id, input.sourceUrl]
+    );
+    if (!snapshot.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'OFFICIAL_SOURCE_NOT_FETCHED' }); }
+    const facts = factsFromPimInput(input);
+    if (!facts.length) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'PRODUCT_SPECS_REQUIRED' }); }
+    const factPaths = new Set(facts.map((fact: any) => fact.path));
+    const unknownPaths = Object.keys(input.factSources || {}).filter((path) => !factPaths.has(path));
+    if (unknownPaths.length) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'FACT_PROVENANCE_UNKNOWN_FIELD', paths: unknownPaths.slice(0, 50) }); }
+    if (snapshot.rows[0].body_encoding !== 'utf8' || typeof snapshot.rows[0].raw_payload !== 'string') {
+      await client.query('ROLLBACK'); return res.status(422).json({ error: 'FACT_SOURCE_TEXT_UNAVAILABLE' });
+    }
+    const sourceText = normalizeSourceEvidence(snapshot.rows[0].raw_payload);
+    const evidence = input.factSources || {};
+    const missing = facts.filter((fact: any) => !evidence[fact.path]);
+    const invalid = facts.filter((fact: any) => {
+      const excerpt = String(evidence[fact.path]?.excerpt || '').trim();
+      const normalized = normalizeSourceEvidence(excerpt);
+      return normalized.length < 5 || !sourceText.includes(normalized) || !evidenceContainsFactValue(excerpt, fact.value);
+    });
+    if (missing.length || invalid.length) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'FACT_PROVENANCE_INCOMPLETE', missing: missing.map((x: any) => x.path), invalid: invalid.map((x: any) => x.path) }); }
+    await client.query("UPDATE pim_product_staged_revisions SET status='REVIEW',source_snapshot_id=$1,updated_at=NOW() WHERE id=$2", [snapshot.rows[0].id, staged.id]);
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_STAGED_REVISION_SUBMITTED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`, req.params.id, (req as any).authUser.name, JSON.stringify({ stagedRevisionId: staged.id, baseRevision: staged.base_revision, sourceSnapshotId: snapshot.rows[0].id })]);
+    await client.query('COMMIT');
+    return res.json({ data: { id: staged.id, status: 'REVIEW', sourceSnapshotId: snapshot.rows[0].id } });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.post('/api/v1/admin/products/:id/staged-revisions/:revisionId/approve', requireRoles('SUPER_ADMIN','ADMIN','ENGINEER'), async (req: Request, res: Response) => {
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  if (note.length < 20 || note.length > 2000) return res.status(400).json({ error: 'REVIEW_NOTE_REQUIRED' });
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE pim_product_staged_revisions sr SET status='APPROVED',reviewer_id=$1,review_note=$2,updated_at=NOW()
+       FROM pim_products p WHERE sr.id=$3 AND sr.product_id=$4 AND sr.status='REVIEW' AND sr.created_by_id<>$1
+         AND sr.product_id=p.id AND p.status='PUBLISHED' AND p.revision=sr.base_revision
+       RETURNING sr.id,sr.status,sr.base_revision`, [actor.id,note,req.params.revisionId,req.params.id]
+    );
+    if (!result.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'STAGED_REVISION_APPROVAL_INVALID', message: 'Потрібен інший погоджувач і незмінена live-ревізія.' }); }
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_STAGED_REVISION_APPROVED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`,req.params.id,actor.name,JSON.stringify({ stagedRevisionId: req.params.revisionId, note })]);
+    await client.query('COMMIT');
+    return res.json({ data: result.rows[0] });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.post('/api/v1/admin/products/:id/staged-revisions/:revisionId/reject', requireRoles('SUPER_ADMIN','ADMIN','ENGINEER'), async (req: Request, res: Response) => {
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  if (note.length < 10 || note.length > 2000) return res.status(400).json({ error: 'REJECTION_NOTE_REQUIRED' });
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const rejected = await client.query(
+      `UPDATE pim_product_staged_revisions SET status='REJECTED',reviewer_id=$1,review_note=$2,updated_at=NOW()
+       WHERE id=$3 AND product_id=$4 AND status='REVIEW' AND created_by_id<>$1 RETURNING id,status,base_revision`,
+      [actor.id,note,req.params.revisionId,req.params.id]
+    );
+    if (!rejected.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'STAGED_REVISION_REJECTION_INVALID' }); }
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_STAGED_REVISION_REJECTED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`,req.params.id,actor.name,JSON.stringify({ stagedRevisionId: req.params.revisionId, note })]);
+    await client.query('COMMIT');
+    return res.json({ data: rejected.rows[0] });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.post('/api/v1/admin/products/:id/staged-revisions/:revisionId/publish', requireRoles('SUPER_ADMIN','ADMIN'), async (req: Request, res: Response) => {
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `SELECT sr.*,p.revision AS live_revision,p.status AS live_status FROM pim_product_staged_revisions sr
+       JOIN pim_products p ON p.id=sr.product_id WHERE sr.id=$1 AND sr.product_id=$2 FOR UPDATE OF sr,p`, [req.params.revisionId,req.params.id]
+    );
+    const staged = result.rows[0];
+    if (!staged) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'STAGED_REVISION_NOT_FOUND' }); }
+    if (staged.status !== 'APPROVED' || staged.live_status !== 'PUBLISHED' || Number(staged.base_revision) !== Number(staged.live_revision)) {
+      await client.query('ROLLBACK'); return res.status(409).json({ error: 'STAGED_REVISION_PUBLICATION_INVALID' });
+    }
+    const input = staged.payload;
+    const reviewer = await client.query('SELECT name FROM users WHERE id=$1', [staged.reviewer_id]);
+    if (!reviewer.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'STAGED_REVISION_REVIEWER_MISSING' }); }
+    const snapshot = await client.query('SELECT http_status FROM sync_snapshots WHERE id=$1', [staged.source_snapshot_id]);
+    if (!snapshot.rowCount || snapshot.rows[0].http_status < 200 || snapshot.rows[0].http_status >= 300) {
+      await client.query('ROLLBACK'); return res.status(409).json({ error: 'PUBLICATION_EVIDENCE_INVALID' });
+    }
+    const spec = await client.query('SELECT specification_revision FROM pim_specifications WHERE product_id=$1 FOR UPDATE', [req.params.id]);
+    const nextSpecRevision = Number(spec.rows[0].specification_revision) + 1;
+    const nextRevision = Number(staged.live_revision) + 1;
+    await client.query(
+      `UPDATE pim_products SET name=$1,family=$2,category=$3,short_desc=$4,highlight=$5,product_type=$6,source_url=$7,
+       confidence='ENGINEER_REVIEWED',verified_at=NOW(),verified_by=$8,status='PUBLISHED',revision=$9,updated_at=NOW() WHERE id=$10`,
+      [input.name,input.family,input.category,input.shortDesc,input.highlight,input.productType,input.sourceUrl,reviewer.rows[0].name,nextRevision,req.params.id]
+    );
+    await client.query(
+      `UPDATE pim_specifications SET energy_specs=$1::jsonb,cell_specs=$2::jsonb,mechanical_specs=$3::jsonb,thermal_specs=$4::jsonb,
+       safety_specs=$5::jsonb,compatibility=$6::jsonb,specification_revision=$7,updated_at=NOW() WHERE product_id=$8`,
+      [JSON.stringify(input.energySpecs),JSON.stringify(input.cellSpecs),JSON.stringify(input.mechanicalSpecs),JSON.stringify(input.thermalSpecs),JSON.stringify(input.safetySpecs),JSON.stringify(input.compatibility),nextSpecRevision,req.params.id]
+    );
+    await client.query(
+      `INSERT INTO sync_sources (id,name,url,source_type,product_id,enabled) VALUES ($1,$2,$3,'OFFICIAL_WEB',$4,true)
+       ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,url=EXCLUDED.url,enabled=true`,
+      [`SRC-${req.params.id}`,input.name,input.sourceUrl,req.params.id]
+    );
+    for (const fact of factsFromPimInput(input)) {
+      const item = input.factSources[fact.path];
+      await client.query(
+        `INSERT INTO pim_product_fact_sources (product_id,specification_revision,field_path,value_snapshot,source_snapshot_id,page_section,evidence_excerpt,status,verified_by_id,verified_at)
+         VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,'VERIFIED',$8,NOW())`,
+        [req.params.id,nextSpecRevision,fact.path,JSON.stringify(fact.value),staged.source_snapshot_id,item.pageSection,item.excerpt,staged.reviewer_id]
+      );
+    }
+    await client.query("UPDATE pim_product_staged_revisions SET status='PUBLISHED',published_at=NOW(),updated_at=NOW() WHERE id=$1", [staged.id]);
+    await recordPimRevision(client,String(req.params.id),'REVISION_PUBLISHED',actor.name,staged.review_note,staged.source_snapshot_id);
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_STAGED_REVISION_PUBLISHED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`,req.params.id,actor.name,JSON.stringify({ stagedRevisionId: staged.id, revision: nextRevision, baseRevision: staged.base_revision })]);
+    await client.query('COMMIT');
+    return res.json({ data: { id: req.params.id, stagedRevisionId: staged.id, status: 'PUBLISHED', revision: nextRevision } });
   } catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }
 });
