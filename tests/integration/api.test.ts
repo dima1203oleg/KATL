@@ -277,8 +277,47 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
     assert.equal(unsafeSyncApproval.status, 409);
     const unchangedLiveProduct = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
     assert.equal((await unchangedLiveProduct.json() as { data: { name: string } }).data.name, liveProduct.data.name);
+    const stagedPayload = {
+      id: publishProductId, name: 'Integration publication product corrected', family: 'TEST', category: 'Utility-scale ESS', productType: 'ESS_SYSTEM',
+      shortDesc: '', highlight: '', sourceUrl: 'https://www.catl.com/en/news/publication-test', energySpecs: { nominalCapacityMWh: 1 },
+      cellSpecs: {}, mechanicalSpecs: {}, thermalSpecs: {}, safetySpecs: {}, compatibility: {},
+      factSources: { '/energy_specs/nominalCapacityMWh': { pageSection: 'Technical specifications', excerpt: 'Nominal capacity: 1 MWh' } },
+    };
+    const stagedResponse = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify(stagedPayload),
+    });
+    assert.equal(stagedResponse.status, 201);
+    const staged = await stagedResponse.json() as { data: { id: string; status: string; base_revision: number } };
+    assert.equal(staged.data.status, 'DRAFT');
+    const duplicateStaged = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify(stagedPayload),
+    });
+    assert.equal(duplicateStaged.status, 409);
+    const stillLiveBeforeReview = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
+    assert.equal((await stillLiveBeforeReview.json() as { data: { name: string } }).data.name, liveProduct.data.name);
+    const stagedReview = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions/${staged.data.id}/submit-review`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: '{}',
+    });
+    assert.equal(stagedReview.status, 200);
+    const stagedSelfApproval = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions/${staged.data.id}/approve`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify({ note: 'Reviewed official source and verified corrected product data.' }),
+    });
+    assert.equal(stagedSelfApproval.status, 409);
+    const stagedApproved = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions/${staged.data.id}/approve`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: engineerCookie }, body: JSON.stringify({ note: 'Reviewed official source and verified corrected product data.' }),
+    });
+    assert.equal(stagedApproved.status, 200);
+    const stagedPublish = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions/${staged.data.id}/publish`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: '{}',
+    });
+    assert.equal(stagedPublish.status, 200);
+    const correctedLive = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
+    const correctedProduct = await correctedLive.json() as { data: { name: string; provenance: { facts: Record<string, { verifiedBy: string }> } } };
+    assert.equal(correctedProduct.data.name, stagedPayload.name);
+    const stagedFact = correctedProduct.data.provenance.facts['/energy_specs/nominalCapacityMWh'];
+    assert.equal(stagedFact.verifiedBy, 'Independent Test Engineer');
     const revisions = await pool.query('SELECT event FROM pim_product_revisions WHERE product_id=$1 ORDER BY revision', [publishProductId]);
-    assert.deepEqual(revisions.rows.map((row) => row.event), ['CREATED', 'UPDATED', 'SUBMITTED', 'APPROVED', 'PUBLISHED']);
+    assert.deepEqual(revisions.rows.map((row) => row.event), ['CREATED', 'UPDATED', 'SUBMITTED', 'APPROVED', 'PUBLISHED', 'REVISION_PUBLISHED']);
 
     const calculation = await fetch(`http://127.0.0.1:${address.port}/api/v1/calculations/bess`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
