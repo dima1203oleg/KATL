@@ -94,7 +94,6 @@ export function SiteFooter() {
 export function MobileCta() {
   const pathname = usePathname();
   const locale = pathname.split('/')[1] || 'uk-UA';
-  if (pathname === `/${locale}` || ['/products','/compare','/design/tener-h'].some((path)=>pathname.endsWith(path))) return null;
   if (pathname.endsWith('/rfq') || pathname.endsWith('/bess-designer')) return null;
   const en=locale==='en';const zh=locale==='zh-CN';return <div className="mobile-cta"><Link className="button button-secondary" href={`/${locale}/bess-designer`}>{en?'Calculate':zh?'计算':'Розрахувати'}</Link><Link className="button" href={`/${locale}/rfq`}>{en?'Request a proposal':zh?'获取方案':'Отримати пропозицію'}</Link></div>;
 }
