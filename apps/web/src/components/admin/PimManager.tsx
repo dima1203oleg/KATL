@@ -1,14 +1,15 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Archive, FilePlus2, Pencil, RotateCw, Save } from 'lucide-react';
+import { FormEvent, Fragment, useCallback, useEffect, useState } from 'react';
+import { Archive, Check, FilePlus2, Pencil, RotateCw, Save, Send, Upload, X } from 'lucide-react';
 
 type Product = {
   id: string; name: string; family: string; category: string; product_type: string; short_desc: string; highlight: string; status: string;
-  source_url: string; confidence: string; verified_at: string | null; verified_by: string | null; revision: number; updated_at: string;
+  source_url: string; confidence: string; verified_at: string | null; verified_by: string | null; revision: number; updated_at: string; latest_source_snapshot_id: string | null;
   energy_specs: Record<string, unknown>; cell_specs: Record<string, unknown>; mechanical_specs: Record<string, unknown>;
   thermal_specs: Record<string, unknown>; safety_specs: Record<string, unknown>; compatibility: Record<string, unknown>;
 };
+type Revision = { revision: number; event: string; actor: string; note: string | null; source_snapshot_id: string | null; created_at: string };
 type Form = {
   id: string; name: string; family: string; category: string; productType: string; shortDesc: string; highlight: string; sourceUrl: string;
   energySpecs: string; cellSpecs: string; mechanicalSpecs: string; thermalSpecs: string; safetySpecs: string; compatibility: string;
@@ -33,7 +34,7 @@ function asJson(value: string, label: string) {
   catch { throw new Error(`Поле «${label}» має містити коректний JSON-об’єкт.`); }
 }
 
-export function PimManager() {
+export function PimManager({ userRole }: { userRole: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState<Form>(blank);
   const [editing, setEditing] = useState(false);
@@ -41,6 +42,7 @@ export function PimManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [history, setHistory] = useState<Record<string, Revision[]>>({});
 
   const load = useCallback(async (q = query) => {
     setBusy(true); setError('');
@@ -81,6 +83,39 @@ export function PimManager() {
     finally { setBusy(false); }
   }
 
+  async function transition(product: Product, action: 'submit-review' | 'review/approve' | 'review/reject' | 'publish') {
+    const note = action === 'review/approve' ? window.prompt('Опишіть, що звірили з офіційним знімком CATL (щонайменше 20 символів):')
+      : action === 'review/reject' ? window.prompt('Причина відхилення (щонайменше 10 символів):')
+        : action === 'publish' ? window.prompt('Примітка до публікації (необов’язково):') : null;
+    if ((action === 'review/approve' || action === 'review/reject') && note === null) return;
+    if (action === 'publish' && note === null) return;
+    const labels = { 'submit-review': 'подати на інженерну перевірку', 'review/approve': 'погодити', 'review/reject': 'відхилити', publish: 'опублікувати' };
+    if (!window.confirm(`Ви впевнені, що хочете ${labels[action]} «${product.name}»?`)) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const result = await request<{ data: { id: string; status: string; revision: number } }>(
+        `admin/products/${encodeURIComponent(product.id)}/${action}`,
+        { method: 'POST', body: JSON.stringify(note === null ? {} : { note }) },
+      );
+      setNotice(`${result.data.id}: ${result.data.status} · ревізія ${result.data.revision}.`);
+      await load('');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Перехід стану не виконано.'); }
+    finally { setBusy(false); }
+  }
+
+  async function toggleHistory(product: Product) {
+    if (history[product.id]) {
+      setHistory((current) => { const next = { ...current }; delete next[product.id]; return next; });
+      return;
+    }
+    setBusy(true); setError('');
+    try {
+      const result = await request<{ data: Revision[] }>(`admin/products/${encodeURIComponent(product.id)}/revisions`);
+      setHistory((current) => ({ ...current, [product.id]: result.data }));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не вдалося завантажити історію ревізій.'); }
+    finally { setBusy(false); }
+  }
+
   return <div className="pim-workspace">
     <section className="admin-card"><div className="admin-section-title"><div><h2>{editing ? `Редагування чернетки · ${form.id}` : 'Нова картка продукту'}</h2><p>Потрібне офіційне джерело CATL. Збережений запис не публікується автоматично.</p></div>{editing && <button className="admin-link" type="button" onClick={() => { setForm(blank); setEditing(false); }}>Скасувати</button>}</div>
       {error && <div className="admin-alert" role="alert">{error}</div>}{notice && <div className="admin-notice" role="status">{notice}</div>}
@@ -91,7 +126,7 @@ export function PimManager() {
       </form>
     </section>
     <section className="admin-card"><div className="admin-section-title"><div><h2>Реєстр продуктів</h2><p>Чернетки й опубліковані записи з поточної бази PIM.</p></div><span className="admin-count">{products.length} записів</span></div><form className="pim-search" onSubmit={(event) => { event.preventDefault(); void load(query); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Назва, slug або сімейство" aria-label="Пошук PIM"/><button className="button button-secondary" disabled={busy}>Знайти</button><button className="admin-link" type="button" onClick={() => { setQuery(''); void load(''); }}>Скинути</button></form>
-      {products.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Продукт</th><th>Сімейство / категорія</th><th>Статус</th><th>Джерело / перевірка</th><th>Ревізія</th><th>Дія</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td><strong>{product.name}</strong><small>{product.id}</small></td><td>{product.family}<small>{product.category} · {product.product_type}</small></td><td><span className={`pim-status pim-${product.status.toLowerCase()}`}>{product.status}</span><small>{product.confidence}</small></td><td>{product.source_url ? <a href={product.source_url} target="_blank" rel="noreferrer">Офіційне джерело →</a> : 'Немає джерела'}<small>{product.verified_at ? `Перевірив ${product.verified_by}` : 'Не перевірено'}</small></td><td>r{product.revision}<small>{new Date(product.updated_at).toLocaleDateString('uk-UA')}</small></td><td>{['DRAFT','REVIEW'].includes(product.status) ? <div className="pim-row-actions"><button className="admin-link" type="button" onClick={() => edit(product)}><Pencil size={14}/> Редагувати</button><button className="admin-link danger" type="button" onClick={() => archive(product)} disabled={busy}><Archive size={14}/> Архів</button></div> : 'Захищено'}</td></tr>)}</tbody></table></div> : <div className="admin-empty"><FilePlus2 size={19}/><p>{busy ? 'Завантажуємо PIM…' : 'Записів PIM немає. Додайте продукт із підтвердженим офіційним джерелом.'}</p></div>}
+      {products.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Продукт</th><th>Сімейство / категорія</th><th>Статус</th><th>Джерело / перевірка</th><th>Ревізія</th><th>Дія</th></tr></thead><tbody>{products.map((product) => <Fragment key={product.id}><tr><td><strong>{product.name}</strong><small>{product.id}</small></td><td>{product.family}<small>{product.category} · {product.product_type}</small></td><td><span className={`pim-status pim-${product.status.toLowerCase()}`}>{product.status}</span><small>{product.confidence}</small></td><td>{product.source_url ? <a href={product.source_url} target="_blank" rel="noreferrer">Офіційне джерело →</a> : 'Немає джерела'}<small>{product.verified_at ? `Перевірив ${product.verified_by}` : product.latest_source_snapshot_id ? 'Офіційний знімок отримано' : 'Знімка ще немає'}</small></td><td>r{product.revision}<small>{new Date(product.updated_at).toLocaleDateString('uk-UA')}</small></td><td><div className="pim-row-actions">{product.status === 'DRAFT' && <><button className="admin-link" type="button" onClick={() => edit(product)}><Pencil size={14}/> Редагувати</button><button className="admin-link" type="button" disabled={busy || !product.latest_source_snapshot_id} title={!product.latest_source_snapshot_id ? 'Спочатку запустіть CATL Sync і отримайте успішний знімок' : undefined} onClick={() => transition(product, 'submit-review')}><Send size={14}/> На перевірку</button><button className="admin-link danger" type="button" onClick={() => archive(product)} disabled={busy}><Archive size={14}/> Архів</button></>}{product.status === 'REVIEW' && ['SUPER_ADMIN','ADMIN','ENGINEER'].includes(userRole) && <><button className="admin-link" type="button" onClick={() => transition(product, 'review/approve')} disabled={busy}><Check size={14}/> Погодити</button><button className="admin-link danger" type="button" onClick={() => transition(product, 'review/reject')} disabled={busy}><X size={14}/> Відхилити</button></>}{product.status === 'APPROVED' && ['SUPER_ADMIN','ADMIN'].includes(userRole) && <button className="admin-link" type="button" onClick={() => transition(product, 'publish')} disabled={busy}><Upload size={14}/> Опублікувати</button>}{product.status === 'PUBLISHED' && <span className="admin-badge">На сайті</span>}<button className="admin-link" type="button" onClick={() => toggleHistory(product)} disabled={busy}>{history[product.id] ? 'Сховати історію' : 'Історія ревізій'}</button></div></td></tr>{history[product.id] && <tr><td colSpan={6}><div className="pim-revision-history"><strong>Історія ревізій · {product.id}</strong>{history[product.id].length ? history[product.id].map((entry) => <div className="pim-revision-item" key={`${entry.revision}-${entry.event}`}><span>r{entry.revision} · {entry.event}</span><span>{entry.actor} · {new Date(entry.created_at).toLocaleString('uk-UA')}</span>{entry.note && <p>{entry.note}</p>}{entry.source_snapshot_id && <small>Source snapshot: {entry.source_snapshot_id}</small>}</div>) : <p>Для старих записів історія змін ще не була збережена.</p>}</div></td></tr>}</Fragment>)}</tbody></table></div> : <div className="admin-empty"><FilePlus2 size={19}/><p>{busy ? 'Завантажуємо PIM…' : 'Записів PIM немає. Додайте продукт із підтвердженим офіційним джерелом.'}</p></div>}
     </section>
   </div>;
 }

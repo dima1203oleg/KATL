@@ -1,6 +1,6 @@
 # KATL Final Production Report
 
-**Assessment date:** 2026-10-01
+**Assessment date:** 2026-10-02
 
 **Final status: NOT PRODUCTION READY**
 
@@ -40,13 +40,15 @@ The repository contained a Vite application and an incomplete Next.js/API/worker
 - Made the worker wait for successful database migrations and fixed its RFQ-delivery audit insert. A full local Compose run demonstrated that a browser-submitted RFQ was persisted, dispatched by BullMQ, delivered to the Mailpit test inbox, and recorded in audit; CRM remained correctly marked PENDING because no CRM endpoint is configured.
 - Tightened RFQ browser form validation so required fields and consent are checked before sending.
 - Added a protected Next.js admin control center with role-gated overview, RFQ status management, CATL Sync review actions, and audit browsing. The admin route is `noindex` and runs outside the public-site header/footer.
-- Added PIM draft listing/create/update/archive endpoints and an admin editor. Draft creation requires an HTTPS source URL on official CATL domains and one of the explicit stationary ESS/component categories; it automatically registers a Sync source. Revisions and archival are audited, drafts remain unpublished, and archiving disables the linked source. Publishing and fact-level source review remain unavailable.
+- Added PIM draft listing/create/update/archive endpoints and an admin editor. Draft creation requires an HTTPS source URL on official CATL domains and one of the explicit stationary ESS/component categories; it automatically registers a Sync source.
+- Added an explicit PIM draft → review → engineer approval → admin publication workflow. Submission requires non-empty specifications and a successful captured 2xx snapshot from the registered CATL URL; the creator cannot approve their own draft. Reviewer notes, snapshot identity, publication transitions, revision snapshots and audit events are persisted, and admins can inspect revision history. Direct Sync changes to published product values are blocked until a staged revision path exists.
 - Extended the official source allowlist to CATL's global and China domains (`catl.com` and `catl.com.cn`, including subdomains). Admin Sync shows registered sources and reviewable changes; crawler snapshots remain limited to basic extraction and have not been live-verified against CATL.
-- Closed the local admin workflow in Chromium and Firefox: create PIM draft → see registered CATL source → archive draft → verify source is disabled. The test also covers RFQ status updates and logout.
+- Closed the local admin workflow in Chromium and Firefox: create PIM draft → see registered CATL source → verify review is disabled until a source snapshot exists → inspect revision history → archive draft → verify source is disabled. PostgreSQL integration covers source-gated review, maker-checker, approval, publication, public visibility, RFQ association and protection from direct Sync changes to published data.
+- Added durable BESS sizing results: each calculation stores its algorithm version, inputs, result and locale in PostgreSQL. RFQ can reference that immutable calculation; the API rejects missing or mismatched IDs/values. The calculator carries the saved calculation into the RFQ form.
 
 ## Database migrations
 
-Added migrations `0003` through `0012` for sessions/RFQ history, attribution, role constraints, durable outbox, sync evidence, document metadata, PIM publication evidence, localized product specifications/workflow, and the entity/semantic SEO plan. Migrations `0001`–`0012` were run successfully on an ephemeral local PostgreSQL 16 container; seed and test-admin provisioning completed. This is not a production database and does not verify backups or restore compatibility.
+Added migrations `0003` through `0015` for sessions/RFQ history, attribution, role constraints, durable outbox, sync evidence, document metadata, PIM publication evidence, localized product specifications/workflow, entity/semantic SEO, review/revision history, creator identity and persisted BESS calculations. `0001`–`0015` completed on a fresh temporary PostgreSQL database; `0015` was also applied to the local Compose database. This is not a production database and does not verify backups or restore compatibility.
 
 ## Verification results
 
@@ -54,12 +56,16 @@ Added migrations `0003` through `0012` for sessions/RFQ history, attribution, ro
 |---|---|---|
 | `npm ci` | PASS | Clean dependency installation completed. |
 | Lint/typecheck | PASS | Root, API, worker, and web checks completed. |
+| Current API integration suite | PASS (local Compose PostgreSQL) | 8/8 tests passed, including publication workflow, persisted calculation snapshots and calculation-to-RFQ association/value matching. Bundled from current source and run inside the API container to use its private database credentials. |
+| Current Next.js build | PASS | `npm run build:web` completed after calculation-to-RFQ changes. |
+| Current API build | PASS | `npm run build:api` completed; its bundle was copied into the running local API container for acceptance. Current Docker image rebuild remains blocked by disk capacity. |
+| Clean database migrations | PASS (temporary local database) | Migration runner applied `0001`–`0015` on a fresh PostgreSQL database; the temporary database was dropped after verification. |
 | Unit/API/integration tests | PASS (local) | `npm test`: 19 passed against PostgreSQL 16 and Valkey; includes RFQ lifecycle and auth/audit persistence. Not yet observed in GitHub Actions. |
 | Production builds | PASS (local) | `npm run build` passed for legacy Vite, Next.js, API/migration runner, and worker. Current web/API/migration runner/worker production images also built successfully. Legacy Vite reports a 642.57 kB minified JS chunk warning; it remains retained pending parity. |
 | Compose configuration and local stack | PASS (ephemeral local) | Full PostgreSQL, Valkey, migration, API, worker, Mailpit and Next web stack started; readiness and migration gating passed. This is not staging or production. |
-| Docker image builds | PASS (local) | `docker compose -f docker-compose.yml -f docker-compose.dev.yml build` successfully built web, API/migration runner, and worker images. Disk pressure was resolved by clearing disposable build cache; database volumes were retained. |
+| Docker image builds | CURRENT PATCH BLOCKED | Previous revision images built successfully. Rebuilding current images exhausted disk even after build-cache cleanup; existing volumes/data were preserved. Source builds and the current API/Web runtime checks passed separately. |
 | GitHub Actions | NOT RUN | CI changes have not been pushed/observed on a GitHub runner; Actions API access is denied in this session. |
-| Browser acceptance / Playwright | PARTIAL PASS | Against the local production Compose stack, Chromium 8/8 and Firefox 8/8 pass (16/16 total), including locale routing, public RFQ, protected admin login, persisted RFQ status change, PIM draft creation, source registration, archival/source disable, logout, 404, and responsive widths through 1920 px. WebKit could not launch because this environment lacks system libraries; CI installs them but has not run. No real iOS/Android device matrix or visual regression baseline yet. |
+| Browser acceptance / Playwright | PARTIAL PASS | Current local Next/API runtime: Chromium 9/9 and Firefox 9/9 pass (18/18), including persisted calculation → RFQ with unchanged values, locale routing, public RFQ, protected admin login/status change, PIM review/publish UI, 404 and responsive checks through 1920 px. WebKit could not launch because this environment lacks system libraries; CI has not run. No real iOS/Android device matrix or visual regression baseline yet. |
 | Locale routing HTTP smoke | PASS | Root redirects to Ukrainian for UA edge country, Chinese for CN, browser preference for a supported language, and saved preference; `/en` rendered 200 and `/zh-CN/bess` rendered 404 (translation coverage is incomplete). |
 | Dependency security audit | PASS | `npm audit --audit-level=high`: zero vulnerabilities. |
 | AI provider failover | NOT RUN | No provider credentials were supplied; only NOT_CONFIGURED/error behavior is implemented. |
@@ -73,7 +79,7 @@ Added migrations `0003` through `0012` for sessions/RFQ history, attribution, ro
 - The sync path allows official HTTPS `catl.com` and `catl.com.cn` hostnames and basic structured Product extraction. PDF extraction is pending; snapshots currently use PostgreSQL rather than S3/MinIO. No CATL source was fetched or verified during acceptance.
 - AI has a Gemini adapter path but no live provider test, provider failover, durable FinOps accounting, or complete 10–15-provider adapter set.
 - The web app now has a public route foundation, but many routes are status pages or incomplete flows. Catalog content is intentionally empty until reviewed PIM entities are published. Customer/partner/admin portals, CMS, localization workflow, RAG, semantic SEO operations, and full search acceptance remain incomplete.
-- The new admin control center connects existing RFQ, sync-review and audit APIs, and PIM can create/edit audited drafts. There is no publish approval UI, immutable product revision history, fact-level provenance, source-document validation, complete PIM workflow or route-level customer/partner portals.
+- PIM now has a human approval/publish path and revision history, but no claim-level provenance or published-product staged revision workflow. Source page snapshots do not verify each individual technical fact. Customer/partner portals, CMS, localization workflow, RAG and much of admin remain incomplete.
 - Translation jobs, document processing, and SEO background jobs return explicit unconfigured-handler failures instead of fake success.
 - There is no production Playwright gate result from GitHub Actions, staging environment, checked restore, production monitoring deployment, or verified rollback run. Local browser tests do not substitute for real iOS Safari/Android/WebView validation.
 - Product Sync snapshots still lack S3/MinIO object storage; the admin can review extracted changes, but source crawling/extraction coverage and engineering fact approval are incomplete.
@@ -99,10 +105,10 @@ Added migrations `0003` through `0012` for sessions/RFQ history, attribution, ro
 - Run the complete Docker Compose stack and queue workflows in staging against production-equivalent PostgreSQL/Redis.
 - Enable WebKit dependencies in a runnable CI environment and pass the WebKit/Safari suite; add full device and visual regression evidence.
 - Complete the missing public routes and customer, partner, and admin workflows, plus CMS, localization, RAG, document storage, and reviewed catalog acceptance.
-- Complete PIM fact-level provenance, product revision history, human publication approval, and populate only after CATL source documents have been verified.
+- Complete fact-level provenance and staged revisions for published products; the new manual publication review is not a substitute for per-fact evidence.
 - Expand browser coverage from the 16 passing Chromium/Firefox checks to the complete page/workflow matrix; pass WebKit, visual regression, accessibility and performance gates.
 - Verify real CATL sources and snapshots, document processing, AI provider fallback, SMTP, and CRM delivery.
-- Configure a staging host and production deploy credentials, run CI, backup/restore, deployment smoke tests, and rollback drill.
+- Rebuild current Docker images after provisioning enough disk; configure staging and production deploy credentials, run CI, backup/restore, deployment smoke tests, and rollback drill.
 - Provide a compatible host/registry and a temporary domain for this Dockerized Next.js + API + PostgreSQL + Redis + worker stack; the connected Sites host cannot run this monorepo without replacing its backend and persistence architecture. `catl.site` currently returns HTTP 503.
 
 **FINAL STATUS: NOT PRODUCTION READY**

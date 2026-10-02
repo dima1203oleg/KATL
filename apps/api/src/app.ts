@@ -40,6 +40,7 @@ app.use(express.json({ limit: '5mb' }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false });
 const rfqLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 20, standardHeaders: 'draft-8', legacyHeaders: false });
+const calculationLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
 const aiLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
 
 // -------------------------------------------------------------
@@ -109,6 +110,21 @@ const productFromRow = (row: any) => ({
   },
 });
 
+async function recordPimRevision(client: any, productId: string, event: string, actor: string, note: string | null = null, sourceSnapshotId: string | null = null) {
+  const { rows } = await client.query(
+    `SELECT p.*, to_jsonb(s) AS specifications FROM pim_products p
+     LEFT JOIN pim_specifications s ON s.product_id = p.id WHERE p.id = $1`,
+    [productId]
+  );
+  const product = rows[0];
+  if (!product) throw new Error('PRODUCT_NOT_FOUND');
+  await client.query(
+    `INSERT INTO pim_product_revisions (product_id, revision, event, snapshot, actor, note, source_snapshot_id)
+     VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)`,
+    [productId, product.revision, event, JSON.stringify(product), actor, note, sourceSnapshotId]
+  );
+}
+
 const PRODUCT_SELECT = `SELECT p.*, s.energy_specs, s.cell_specs, s.mechanical_specs,
   s.thermal_specs, s.safety_specs, s.compatibility,
   t.name AS localized_name, t.short_desc AS localized_short_desc, t.highlight AS localized_highlight,
@@ -126,7 +142,7 @@ async function reviewSyncChange(changeId: string, actor: any, decision: 'APPROVE
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      'SELECT c.*, p.name, p.short_desc FROM sync_changes c JOIN pim_products p ON p.id = c.product_id WHERE c.id = $1 FOR UPDATE OF c, p',
+      'SELECT c.*, p.name, p.short_desc, p.status AS product_status FROM sync_changes c JOIN pim_products p ON p.id = c.product_id WHERE c.id = $1 FOR UPDATE OF c, p',
       [changeId]
     );
     const change = rows[0];
@@ -139,6 +155,10 @@ async function reviewSyncChange(changeId: string, actor: any, decision: 'APPROVE
       return { status: 'CONFLICT' as const };
     }
     if (decision === 'APPROVED') {
+      if (change.product_status === 'PUBLISHED') {
+        await client.query('ROLLBACK');
+        return { status: 'PUBLISHED_PRODUCT_REQUIRES_REVISION' as const };
+      }
       const columns: Record<string, string> = { name: 'name', short_desc: 'short_desc' };
       const column = columns[change.field];
       if (!column) {
@@ -154,6 +174,7 @@ async function reviewSyncChange(changeId: string, actor: any, decision: 'APPROVE
         `UPDATE pim_products SET ${column} = $1, source_url = $2, verified_at = NOW(), verified_by = $3, confidence = 'OFFICIAL_CATL', revision = revision + 1, updated_at = NOW() WHERE id = $4`,
         [newValue, change.source_url, actor.name, change.product_id]
       );
+      await recordPimRevision(client, change.product_id, 'UPDATED', actor.name, `CATL Sync approved: ${change.field}`, change.snapshot_id || null);
     }
     await client.query(
       'UPDATE sync_changes SET status = $1, reviewed_by = $2, reviewed_at = NOW() WHERE id = $3',
@@ -320,9 +341,14 @@ app.get('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req:
   const status = typeof req.query.status === 'string' ? req.query.status : null;
   const { rows } = await getDatabasePool().query(
     `SELECT p.id, p.name, p.family, p.category, p.product_type, p.short_desc, p.highlight, p.status, p.source_url,
-      p.verified_at, p.verified_by, p.confidence, p.revision, p.updated_at,
+      p.verified_at, p.verified_by, p.confidence, p.revision, p.updated_at, evidence.snapshot_id AS latest_source_snapshot_id,
       s.energy_specs, s.cell_specs, s.mechanical_specs, s.thermal_specs, s.safety_specs, s.compatibility
      FROM pim_products p JOIN pim_specifications s ON s.product_id = p.id
+     LEFT JOIN LATERAL (
+       SELECT ss.id AS snapshot_id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
+       WHERE src.product_id=p.id AND src.enabled=true AND src.url=p.source_url AND ss.http_status BETWEEN 200 AND 299
+       ORDER BY ss.captured_at DESC LIMIT 1
+     ) evidence ON true
      WHERE ($1::text = '' OR p.name ILIKE '%' || $1 || '%' OR p.id ILIKE '%' || $1 || '%' OR p.family ILIKE '%' || $1 || '%')
        AND ($2::text IS NULL OR p.status = $2)
      ORDER BY p.updated_at DESC LIMIT 500`,
@@ -340,9 +366,9 @@ app.post('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req
   try {
     await client.query('BEGIN');
     const inserted = await client.query(
-      `INSERT INTO pim_products (id, name, family, category, short_desc, highlight, status, product_type, source_url, confidence, revision)
-       VALUES ($1,$2,$3,$4,$5,$6,'DRAFT',$7,$8,'UNVERIFIED',1) RETURNING id, status, revision`,
-      [input.id, input.name, input.family, input.category, input.shortDesc, input.highlight, input.productType, input.sourceUrl]
+      `INSERT INTO pim_products (id, name, family, category, short_desc, highlight, status, product_type, source_url, confidence, revision, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,'DRAFT',$7,$8,'UNVERIFIED',1,$9) RETURNING id, status, revision`,
+      [input.id, input.name, input.family, input.category, input.shortDesc, input.highlight, input.productType, input.sourceUrl, actor.id]
     );
     await client.query(
       `INSERT INTO pim_specifications (product_id, energy_specs, cell_specs, mechanical_specs, thermal_specs, safety_specs, compatibility)
@@ -359,6 +385,7 @@ app.post('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req
        VALUES ($1,'PIM_DRAFT_CREATED','Product',$2,$3,$4::jsonb)`,
       [`AUD-${randomUUID()}`, input.id, actor.name, JSON.stringify({ sourceUrl: input.sourceUrl, status: 'DRAFT', revision: 1 })]
     );
+    await recordPimRevision(client, input.id, 'CREATED', actor.name);
     await client.query('COMMIT');
     res.status(201).json({ success: true, data: inserted.rows[0] });
   } catch (error: any) {
@@ -404,12 +431,166 @@ app.put('/api/v1/admin/products/:id', requireRoles(...PIM_EDITOR_ROLES), async (
        VALUES ($1,'PIM_DRAFT_UPDATED','Product',$2,$3,$4::jsonb)`,
       [`AUD-${randomUUID()}`, input.id, actor.name, JSON.stringify({ status: 'DRAFT', revision, sourceUrl: input.sourceUrl })]
     );
+    await recordPimRevision(client, input.id, 'UPDATED', actor.name);
     await client.query('COMMIT');
     res.json({ success: true, data: { id: input.id, status: 'DRAFT', revision } });
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally { client.release(); }
+});
+
+app.get('/api/v1/admin/products/:id/revisions', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const { rows } = await getDatabasePool().query(
+    `SELECT revision, event, actor, note, source_snapshot_id, created_at
+     FROM pim_product_revisions WHERE product_id=$1 ORDER BY revision DESC LIMIT 100`,
+    [req.params.id]
+  );
+  res.json({ data: rows });
+});
+
+app.post('/api/v1/admin/products/:id/submit-review', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      `SELECT p.id,p.status,p.revision,p.source_url,s.energy_specs,s.cell_specs,s.mechanical_specs,s.thermal_specs,s.safety_specs,s.compatibility
+       FROM pim_products p JOIN pim_specifications s ON s.product_id=p.id WHERE p.id=$1 FOR UPDATE OF p`,
+      [id]
+    );
+    const product = current.rows[0];
+    if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
+    if (product.status !== 'DRAFT') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_NOT_DRAFT', message: 'На перевірку можна подати лише чернетку.' }); }
+    const hasSpecs = ['energy_specs','cell_specs','mechanical_specs','thermal_specs','safety_specs','compatibility']
+      .some((key) => product[key] && Object.keys(product[key]).length > 0);
+    if (!hasSpecs) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'PRODUCT_SPECS_REQUIRED', message: 'Додайте перевірювані характеристики перед поданням на перевірку.' }); }
+    const snapshot = await client.query(
+      `SELECT ss.id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
+       WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.http_status BETWEEN 200 AND 299
+       ORDER BY ss.captured_at DESC LIMIT 1`,
+      [id, product.source_url]
+    );
+    if (!snapshot.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'OFFICIAL_SOURCE_NOT_FETCHED', message: 'Спочатку виконайте успішне отримання офіційного джерела CATL.' }); }
+    const revision = Number(product.revision) + 1;
+    await client.query("UPDATE pim_products SET status='REVIEW',revision=$1,updated_at=NOW() WHERE id=$2", [revision, id]);
+    await client.query(
+      `INSERT INTO audit_logs (id, action, entity, entity_id, actor, details)
+       VALUES ($1,'PIM_SUBMITTED_FOR_REVIEW','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`, id, actor.name, JSON.stringify({ revision, sourceSnapshotId: snapshot.rows[0].id })]
+    );
+    await recordPimRevision(client, id, 'SUBMITTED', actor.name, null, snapshot.rows[0].id);
+    await client.query('COMMIT');
+    return res.json({ success: true, data: { id, status: 'REVIEW', revision, sourceSnapshotId: snapshot.rows[0].id } });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.post('/api/v1/admin/products/:id/review/approve', requireRoles('SUPER_ADMIN', 'ADMIN', 'ENGINEER'), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  if (note.length < 20 || note.length > 2000) return res.status(400).json({ error: 'REVIEW_NOTE_REQUIRED', message: 'Залиште примітку перевірки (20–2000 символів).' });
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id,status,revision,source_url FROM pim_products WHERE id=$1 FOR UPDATE', [id]);
+    const product = current.rows[0];
+    if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
+    if (product.status !== 'REVIEW') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_NOT_IN_REVIEW' }); }
+    const creator = await client.query('SELECT created_by FROM pim_products WHERE id=$1', [id]);
+    if (!creator.rows[0]?.created_by || creator.rows[0].created_by === actor.id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'MAKER_CHECKER_REQUIRED', message: 'Чернетку може погодити лише інший користувач; записи без автора треба створити заново з прив’язаною особою.' });
+    }
+    const snapshot = await client.query(
+      `SELECT ss.id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
+       WHERE src.product_id=$1 AND src.enabled=true AND src.url=$2 AND ss.http_status BETWEEN 200 AND 299
+       ORDER BY ss.captured_at DESC LIMIT 1`,
+      [id, product.source_url]
+    );
+    if (!snapshot.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'OFFICIAL_SOURCE_NOT_FETCHED' }); }
+    await client.query(
+      `INSERT INTO pim_product_review_decisions (product_id,revision,source_snapshot_id,reviewer,decision,note)
+       VALUES ($1,$2,$3,$4,'APPROVED',$5)`,
+      [id, product.revision, snapshot.rows[0].id, actor.name, note]
+    );
+    const revision = Number(product.revision) + 1;
+    await client.query(
+      `UPDATE pim_products SET status='APPROVED',confidence='ENGINEER_REVIEWED',verified_at=NOW(),verified_by=$1,revision=$2,updated_at=NOW() WHERE id=$3`,
+      [actor.name, revision, id]
+    );
+    await client.query(
+      `INSERT INTO audit_logs (id, action, entity, entity_id, actor, details)
+       VALUES ($1,'PIM_REVIEW_APPROVED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`, id, actor.name, JSON.stringify({ revision, sourceSnapshotId: snapshot.rows[0].id, note })]
+    );
+    await recordPimRevision(client, id, 'APPROVED', actor.name, note, snapshot.rows[0].id);
+    await client.query('COMMIT');
+    return res.json({ success: true, data: { id, status: 'APPROVED', revision } });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.post('/api/v1/admin/products/:id/review/reject', requireRoles('SUPER_ADMIN', 'ADMIN', 'ENGINEER'), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  if (note.length < 10 || note.length > 2000) return res.status(400).json({ error: 'REJECTION_NOTE_REQUIRED', message: 'Вкажіть причину відхилення (10–2000 символів).' });
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id,status,revision FROM pim_products WHERE id=$1 FOR UPDATE', [id]);
+    const product = current.rows[0];
+    if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
+    if (product.status !== 'REVIEW') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_NOT_IN_REVIEW' }); }
+    const sourceSnapshot = await client.query(
+      `SELECT ss.id FROM sync_sources src JOIN sync_snapshots ss ON ss.source_id=src.id
+       WHERE src.product_id=$1 AND ss.http_status BETWEEN 200 AND 299 ORDER BY ss.captured_at DESC LIMIT 1`, [id]
+    );
+    const snapshotId = sourceSnapshot.rows[0]?.id || null;
+    if (snapshotId) await client.query(
+      `INSERT INTO pim_product_review_decisions (product_id,revision,source_snapshot_id,reviewer,decision,note)
+       VALUES ($1,$2,$3,$4,'REJECTED',$5)`, [id, product.revision, snapshotId, actor.name, note]
+    );
+    const revision = Number(product.revision) + 1;
+    await client.query("UPDATE pim_products SET status='DRAFT',revision=$1,updated_at=NOW() WHERE id=$2", [revision, id]);
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_REVIEW_REJECTED','Product',$2,$3,$4::jsonb)`, [`AUD-${randomUUID()}`,id,actor.name,JSON.stringify({ revision, note })]);
+    await recordPimRevision(client,id,'REJECTED',actor.name,note,snapshotId);
+    await client.query('COMMIT');
+    return res.json({ success: true, data: { id, status: 'DRAFT', revision } });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
+});
+
+app.post('/api/v1/admin/products/:id/publish', requireRoles('SUPER_ADMIN', 'ADMIN'), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 2000) : '';
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query('SELECT id,status,revision,source_url,verified_at,verified_by FROM pim_products WHERE id=$1 FOR UPDATE', [id]);
+    const product = current.rows[0];
+    if (!product) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'PRODUCT_NOT_FOUND' }); }
+    if (product.status !== 'APPROVED') { await client.query('ROLLBACK'); return res.status(409).json({ error: 'PRODUCT_REQUIRES_APPROVAL', message: 'Публікувати можна лише погоджену інженером ревізію.' }); }
+    const decision = await client.query(
+      `SELECT d.revision,d.source_snapshot_id,ss.http_status FROM pim_product_review_decisions d
+       JOIN sync_snapshots ss ON ss.id=d.source_snapshot_id
+       WHERE d.product_id=$1 AND d.decision='APPROVED' ORDER BY d.created_at DESC LIMIT 1`, [id]
+    );
+    if (!decision.rowCount || Number(decision.rows[0].revision) !== Number(product.revision) - 1 || decision.rows[0].http_status < 200 || decision.rows[0].http_status >= 300 || !product.source_url || !product.verified_at || !product.verified_by) {
+      await client.query('ROLLBACK'); return res.status(409).json({ error: 'PUBLICATION_EVIDENCE_INVALID', message: 'Не знайдено актуального погодження з успішним знімком офіційного джерела.' });
+    }
+    const revision = Number(product.revision) + 1;
+    await client.query("UPDATE pim_products SET status='PUBLISHED',revision=$1,updated_at=NOW() WHERE id=$2", [revision, id]);
+    await client.query(`INSERT INTO audit_logs (id,action,entity,entity_id,actor,details) VALUES ($1,'PIM_PRODUCT_PUBLISHED','Product',$2,$3,$4::jsonb)`, [`AUD-${randomUUID()}`,id,actor.name,JSON.stringify({ revision, approvedRevision: decision.rows[0].revision, sourceSnapshotId: decision.rows[0].source_snapshot_id, note })]);
+    await recordPimRevision(client,id,'PUBLISHED',actor.name,note,decision.rows[0].source_snapshot_id);
+    await client.query('COMMIT');
+    return res.json({ success: true, data: { id, status: 'PUBLISHED', revision } });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
 });
 
 app.delete('/api/v1/admin/products/:id', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
@@ -427,6 +608,7 @@ app.delete('/api/v1/admin/products/:id', requireRoles(...PIM_EDITOR_ROLES), asyn
     const revision = Number(current.rows[0].revision) + 1;
     await client.query("UPDATE pim_products SET status='ARCHIVED',revision=$1,updated_at=NOW() WHERE id=$2", [revision, id]);
     await client.query('UPDATE sync_sources SET enabled=false WHERE product_id=$1', [id]);
+    await recordPimRevision(client, id, 'ARCHIVED', actor.name);
     await client.query(
       `INSERT INTO audit_logs (id, action, entity, entity_id, actor, details)
        VALUES ($1,'PIM_DRAFT_ARCHIVED','Product',$2,$3,$4::jsonb)`,
@@ -475,7 +657,7 @@ app.get('/api/v1/products/:id', async (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // 4. Engineering Sizing & LCOS API
 // -------------------------------------------------------------
-app.post('/api/v1/calculations/bess', (req: Request, res: Response) => {
+app.post('/api/v1/calculations/bess', calculationLimiter as any, async (req: Request, res: Response) => {
   const parsed = bessSizingSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'VALIDATION_ERROR', issues: parsed.error.flatten() });
   let result;
@@ -484,10 +666,13 @@ app.post('/api/v1/calculations/bess', (req: Request, res: Response) => {
   } catch {
     return res.status(400).json({ error: 'INVALID_CALCULATION_INPUT' });
   }
-  res.json({
-    data: result,
-    timestamp: new Date().toISOString(),
-  });
+  const calculationId = randomUUID();
+  await getDatabasePool().query(
+    `INSERT INTO bess_calculations (id,algorithm_version,input_snapshot,result_snapshot,locale)
+     VALUES ($1,$2,$3::jsonb,$4::jsonb,$5)`,
+    [calculationId,result.algorithmVersion,JSON.stringify(parsed.data),JSON.stringify(result),canonicalLocale(req.body?.locale)]
+  );
+  res.json({ data: result, calculationId, timestamp: new Date().toISOString() });
 });
 
 app.post('/api/v1/calculations/lcos', (req: Request, res: Response) => {
@@ -517,6 +702,25 @@ app.post('/api/v1/rfq', rfqLimiter as any, async (req: Request, res: Response) =
   let newRfq;
   try {
     await client.query('BEGIN');
+    const selectedProducts = [...new Set(input.selectedProducts || [])];
+    if (selectedProducts.length) {
+      const published = await client.query("SELECT id FROM pim_products WHERE id=ANY($1::varchar[]) AND status='PUBLISHED'", [selectedProducts]);
+      if (published.rowCount !== selectedProducts.length) {
+        await client.query('ROLLBACK');
+        return res.status(422).json({ error: 'RFQ_PRODUCT_NOT_PUBLISHED', message: 'RFQ може містити лише товари з опублікованого каталогу.' });
+      }
+    }
+    if (input.calculationId) {
+      const calculation = await client.query('SELECT result_snapshot FROM bess_calculations WHERE id=$1 FOR SHARE', [input.calculationId]);
+      if (!calculation.rowCount) { await client.query('ROLLBACK'); return res.status(422).json({ error: 'CALCULATION_NOT_FOUND', message: 'Збережений розрахунок не знайдено. Повторіть розрахунок перед надсиланням RFQ.' }); }
+      const result = calculation.rows[0].result_snapshot;
+      if ((input.powerKw !== undefined && Math.abs(input.powerKw - Number(result.requestedPowerMw) * 1000) > 1)
+        || (input.capacityKwh !== undefined && Math.abs(input.capacityKwh - Number(result.nominalEnergyWithReserveMwh) * 1000) > 1)
+        || (input.durationHours !== undefined && Math.abs(input.durationHours - Number(result.input.durationHours)) > 0.01)) {
+        await client.query('ROLLBACK');
+        return res.status(422).json({ error: 'CALCULATION_INPUT_MISMATCH', message: 'Параметри RFQ не збігаються зі збереженим розрахунком.' });
+      }
+    }
     const insertSql = "INSERT INTO rfq_records (id, company_name, contact_person, phone, email, location, power_kw, capacity_kwh, selected_series, use_case, details, status, utm_source, utm_campaign, country, region, industry, duration_hours, utm_medium, utm_content, utm_term, referrer, landing_page, locale, selected_products, calculation_id, crm_sync_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'NEW',$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,'PENDING') RETURNING *";
     const inserted = await client.query(insertSql, [
       id, input.companyName, input.contactPerson, input.phone, input.email,
@@ -619,6 +823,7 @@ app.post('/api/v1/sync/changes/:id/approve', requireRoles('SUPER_ADMIN', 'ADMIN'
   if (result.status === 'CONFLICT') return res.status(409).json({ error: 'SYNC_CHANGE_ALREADY_REVIEWED' });
   if (result.status === 'STALE') return res.status(409).json({ error: 'PRODUCT_CHANGED_SINCE_DETECTION' });
   if (result.status === 'UNSUPPORTED_FIELD') return res.status(422).json({ error: 'FIELD_REQUIRES_ENGINEERING_REVIEW' });
+  if (result.status === 'PUBLISHED_PRODUCT_REQUIRES_REVISION') return res.status(409).json({ error: 'PUBLISHED_PRODUCT_REQUIRES_REVISION', message: 'Зміна не застосована до публічних даних. Спочатку потрібен окремий draft revision workflow.' });
   res.json({ success: true, data: result });
 });
 

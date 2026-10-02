@@ -15,6 +15,6 @@ export default async function RfqPage({params,searchParams}:{params:Promise<{loc
     if(typeof value==='string') attribution[key]=value.slice(0,128);
   }
   const product=query.product;
-  const initial:Record<string,string>={};for(const key of ['powerKw','capacityKwh','durationHours']){const value=query[key];if(typeof value==='string'&&/^\d+(\.\d+)?$/.test(value))initial[key]=value;}
+  const initial:Record<string,string>={};for(const key of ['powerKw','capacityKwh','durationHours','calculationId']){const value=query[key];if(typeof value==='string'&&(key==='calculationId'?/^[0-9a-f-]{36}$/i.test(value):/^\d+(\.\d+)?$/.test(value)))initial[key]=value;}
   return <main><section className="page-hero"><div className="container"><div className="breadcrumbs">Проєкт　/　Запит пропозиції</div><div className="eyebrow">НАСТУПНИЙ КРОК</div><h1>Розкажіть про ваш об’єкт</h1><p>Надайте відомі параметри. Якщо частини даних ще немає, залиште поля порожніми — ми уточнимо вимоги перед підбором системи.</p></div></section><section className="content-section"><div className="container" style={{maxWidth:920}}><RfqForm locale={locale} product={typeof product==='string'?product:undefined} attribution={attribution} initial={initial}/></div></section></main>;
 }

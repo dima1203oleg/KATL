@@ -57,11 +57,18 @@ test('BESS sizing API validates input and returns only reproducible technical es
     body: JSON.stringify({ loadMw: 1.5, durationHours: 3, reservePct: 10 }),
   });
   assert.equal(valid.status, 200);
-  const { data } = await valid.json() as { data: { requestedDeliverableEnergyMwh: number; nominalEnergyWithReserveMwh: number; limitations: string[]; recommendedProduct?: unknown } };
+  const { data, calculationId } = await valid.json() as { data: { requestedDeliverableEnergyMwh: number; nominalEnergyWithReserveMwh: number; limitations: string[]; recommendedProduct?: unknown }; calculationId: string };
   assert.equal(data.requestedDeliverableEnergyMwh, 4.5);
   assert.equal(data.nominalEnergyWithReserveMwh, 4.95);
   assert.ok(data.limitations.length > 0);
   assert.equal(data.recommendedProduct, undefined);
+  assert.match(calculationId, /^[0-9a-f-]{36}$/i);
+  if (process.env.DATABASE_URL) {
+    const storedCalculation = await getDatabasePool().query('SELECT algorithm_version,input_snapshot,result_snapshot FROM bess_calculations WHERE id=$1', [calculationId]);
+    assert.equal(storedCalculation.rows[0].algorithm_version, 'bess-energy-sizing-v2');
+    assert.equal(storedCalculation.rows[0].input_snapshot.loadMw, 1.5);
+    assert.equal(storedCalculation.rows[0].result_snapshot.nominalEnergyWithReserveMwh, 4.95);
+  }
 
   const invalid = await fetch(`http://127.0.0.1:${address.port}/api/v1/calculations/bess`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -105,7 +112,10 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
   const userId = `test-${randomUUID()}`;
   const email = `${userId}@example.test`;
   let rfqId: string | undefined;
+  let calculationId: string | undefined;
   const productId = `pim-${randomUUID()}`;
+  const publishProductId = `pim-publish-${randomUUID()}`;
+  const engineerId = `engineer-${randomUUID()}`;
   try {
     await pool.query(
       'INSERT INTO users (id, email, name, role, password_hash) VALUES ($1,$2,$3,\'SUPER_ADMIN\',$4)',
@@ -121,6 +131,11 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
     const cookie = login.headers.get('set-cookie');
     assert.ok(cookie?.includes('HttpOnly'));
     const sessionCookie = cookie!.split(';', 1)[0];
+
+    await pool.query(
+      'INSERT INTO users (id, email, name, role, password_hash) VALUES ($1,$2,$3,\'ENGINEER\',$4)',
+      [engineerId, `${engineerId}@example.test`, 'Independent Test Engineer', hashPassword('Integration-Test-Password-2026')]
+    );
 
     const deniedPim = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products`);
     assert.equal(deniedPim.status, 401);
@@ -166,24 +181,97 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
     const archivedPim = await pool.query('SELECT status, revision FROM pim_products WHERE id = $1', [productId]);
     assert.deepEqual(archivedPim.rows[0], { status: 'ARCHIVED', revision: 3 });
 
+    const publicationDraft = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie },
+      body: JSON.stringify({
+        id: publishProductId, name: 'Integration publication product', family: 'TEST', category: 'Utility-scale ESS', productType: 'ESS_SYSTEM',
+        sourceUrl: 'https://www.catl.com/en/news/publication-test', energySpecs: { nominalCapacityMWh: 1 }, cellSpecs: {}, mechanicalSpecs: {}, thermalSpecs: {}, safetySpecs: {}, compatibility: {},
+      }),
+    });
+    assert.equal(publicationDraft.status, 201);
+    const reviewWithoutSnapshot = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/submit-review`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: '{}',
+    });
+    assert.equal(reviewWithoutSnapshot.status, 409);
+    await pool.query(
+      `INSERT INTO sync_snapshots (source_id,content_hash,raw_payload,http_status,content_type,size_bytes)
+       VALUES ($1,$2,$3,200,'text/html',12)`,
+      [`SRC-${publishProductId}`, `test-${randomUUID()}`, '<html>review evidence</html>']
+    );
+    const submitted = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/submit-review`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: '{}',
+    });
+    assert.equal(submitted.status, 200);
+    const selfApproval = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/review/approve`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify({ note: 'Reviewed official CATL source and checked technical values.' }),
+    });
+    assert.equal(selfApproval.status, 409);
+    const engineerLogin = await fetch(`http://127.0.0.1:${address.port}/api/v1/auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: `${engineerId}@example.test`, password: 'Integration-Test-Password-2026' }),
+    });
+    assert.equal(engineerLogin.status, 200);
+    const engineerCookie = engineerLogin.headers.get('set-cookie')!.split(';', 1)[0];
+    const approved = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/review/approve`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: engineerCookie },
+      body: JSON.stringify({ note: 'Checked product specifications against the captured official source.' }),
+    });
+    assert.equal(approved.status, 200);
+    const publicBeforePublish = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
+    assert.equal(publicBeforePublish.status, 404);
+    const published = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/publish`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify({ note: 'Approved for publication in integration environment.' }),
+    });
+    assert.equal(published.status, 200);
+    const publicAfterPublish = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
+    assert.equal(publicAfterPublish.status, 200);
+    const approvedSnapshot = await pool.query(
+      `SELECT d.source_snapshot_id FROM pim_product_review_decisions d
+       WHERE d.product_id=$1 AND d.decision='APPROVED' ORDER BY d.created_at DESC LIMIT 1`, [publishProductId]
+    );
+    const liveProduct = await publicAfterPublish.json() as { data: { name: string } };
+    const protectedSyncChange = `CHG-${randomUUID()}`;
+    await pool.query(
+      `INSERT INTO sync_changes (id,product_id,product_name,field,old_value,new_value,source_url,confidence,status,snapshot_id,evidence_excerpt)
+       VALUES ($1,$2,$3,'name',$4::jsonb,$5::jsonb,$6,'HIGH','PENDING_REVIEW',$7,'test evidence')`,
+      [protectedSyncChange,publishProductId,liveProduct.data.name,JSON.stringify(liveProduct.data.name),JSON.stringify('Changed CATL name'),
+        'https://www.catl.com/en/news/publication-test',approvedSnapshot.rows[0].source_snapshot_id]
+    );
+    const unsafeSyncApproval = await fetch(`http://127.0.0.1:${address.port}/api/v1/sync/changes/${protectedSyncChange}/approve`, {
+      method: 'POST', headers: { cookie: sessionCookie },
+    });
+    assert.equal(unsafeSyncApproval.status, 409);
+    const unchangedLiveProduct = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
+    assert.equal((await unchangedLiveProduct.json() as { data: { name: string } }).data.name, liveProduct.data.name);
+    const revisions = await pool.query('SELECT event FROM pim_product_revisions WHERE product_id=$1 ORDER BY revision', [publishProductId]);
+    assert.deepEqual(revisions.rows.map((row) => row.event), ['CREATED', 'SUBMITTED', 'APPROVED', 'PUBLISHED']);
+
+    const calculation = await fetch(`http://127.0.0.1:${address.port}/api/v1/calculations/bess`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ loadMw: 0.5, durationHours: 2, reservePct: 0 }),
+    });
+    assert.equal(calculation.status, 200);
+    const calculationBody = await calculation.json() as { calculationId: string };
+    calculationId = calculationBody.calculationId;
     const create = await fetch(`http://127.0.0.1:${address.port}/api/v1/rfq`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         companyName: 'Integration Test Company', contactPerson: 'Test Engineer',
         phone: '+10000000000', email: 'rfq@example.test', country: 'US',
-        powerKw: 500, capacityKwh: 1000, durationHours: 2,
-        useCase: 'integration test', utmSource: 'ci', selectedProducts: ['catl-tener-h'],
+        powerKw: 500, capacityKwh: 1000, durationHours: 2, calculationId: calculationBody.calculationId,
+        useCase: 'integration test', utmSource: 'ci', selectedProducts: [publishProductId],
       }),
     });
     assert.equal(create.status, 201);
     const created = await create.json() as { data: { id: string } };
     rfqId = created.data.id;
 
-    const stored = await pool.query('SELECT status, utm_source, selected_products FROM rfq_records WHERE id = $1', [rfqId]);
+    const stored = await pool.query('SELECT status, utm_source, selected_products, calculation_id FROM rfq_records WHERE id = $1', [rfqId]);
     assert.equal(stored.rows[0].status, 'NEW');
     assert.equal(stored.rows[0].utm_source, 'ci');
-    assert.deepEqual(stored.rows[0].selected_products, ['catl-tener-h']);
+    assert.deepEqual(stored.rows[0].selected_products, [publishProductId]);
+    assert.equal(stored.rows[0].calculation_id, calculationBody.calculationId);
 
     const update = await fetch(`http://127.0.0.1:${address.port}/api/v1/rfq/${rfqId}/status`, {
       method: 'PATCH',
@@ -204,9 +292,13 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
       await pool.query("DELETE FROM audit_logs WHERE entity = 'RFQ' AND entity_id = $1", [rfqId]);
       await pool.query('DELETE FROM rfq_records WHERE id = $1', [rfqId]);
     }
+    if (calculationId) await pool.query('DELETE FROM bess_calculations WHERE id = $1', [calculationId]);
     await pool.query("DELETE FROM audit_logs WHERE entity = 'Product' AND entity_id = $1", [productId]);
     await pool.query('DELETE FROM sync_sources WHERE id = $1', [`SRC-${productId}`]);
     await pool.query('DELETE FROM pim_products WHERE id = $1', [productId]);
+    await pool.query('DELETE FROM pim_products WHERE id = $1', [publishProductId]);
+    await pool.query('DELETE FROM sync_sources WHERE id = $1', [`SRC-${publishProductId}`]);
+    await pool.query('DELETE FROM users WHERE id = $1', [engineerId]);
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
   }
 });

@@ -150,7 +150,7 @@ export function AdminWorkspace() {
     <header className="admin-topbar"><div><span className="eyebrow">KATL · ЗАХИЩЕНА ЗОНА</span><h1>{tabs.find((item) => item.id === tab)?.label}</h1></div><button className="button button-secondary" onClick={() => void loadTab(tab)} disabled={busy}><RefreshCw size={15}/>Оновити</button></header>
     {error && <div className="admin-alert" role="alert"><CircleAlert size={16}/>{error}</div>}{notice && <div className="admin-notice" role="status"><Check size={16}/>{notice}</div>}
     {busy && <div className="admin-progress" role="status">Оновлюємо дані…</div>}
-    {tab === 'pim' && <PimManager/>}
+    {tab === 'pim' && <PimManager userRole={user.role}/>}
     {tab === 'overview' && <>
       <div className="admin-metrics"><Metric label="Усі RFQ" value={canRfq ? rfqs.length : '—'} hint="Дані з PostgreSQL"/><Metric label="Нові запити" value={canRfq ? rfqs.filter((item) => item.status === 'NEW').length : '—'} hint="Очікують кваліфікації"/><Metric label="Зміни на перевірці" value={canSync ? changes.filter((item) => item.status === 'PENDING_REVIEW').length : '—'} hint="Потрібне рішення інженера"/><Metric label="PIM-записи" value={pimCount ?? '—'} hint="Опублікований каталог"/></div>
       <section className="admin-card"><div className="admin-section-title"><div><h2>Останні запити</h2><p>Останні запити, збережені у внутрішній CRM.</p></div>{canRfq && <button className="admin-link" onClick={() => setTab('rfq')}>Усі RFQ <ArrowRight size={15}/></button>}</div>{!canRfq ? <Empty text="Вашій ролі недоступні комерційні запити."/> : rfqs.length ? <RfqTable items={rfqs.slice(0, 6)} disabled={busy} onChange={updateRfq}/> : <Empty text="Нових запитів поки немає."/>}</section>

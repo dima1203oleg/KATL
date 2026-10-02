@@ -18,7 +18,7 @@ export const createRfqSchema = z.object({
   selectedProducts: z.array(z.string().max(64)).max(20).optional(),
   useCase: optionalText(128),
   details: optionalText(10_000),
-  calculationId: optionalText(64),
+  calculationId: z.string().uuid().optional().or(z.literal('')),
   locale: optionalText(10),
   utmSource: optionalText(128),
   utmMedium: optionalText(128),
@@ -67,6 +67,7 @@ export const bessSizingSchema = z.object({
   loadMw: z.number().finite().gt(0).max(100_000),
   durationHours: z.number().finite().gt(0).max(168),
   reservePct: z.number().finite().min(0).max(50).default(0),
+  locale: z.enum(['uk-UA','en','zh-CN']).optional(),
 }).strict();
 
 export const lcosSchema = z.object({

@@ -1,7 +1,7 @@
 # KATL page acceptance report
 
-Date: 2026-10-01  
-Branch: `main`  
+Date: 2026-10-02
+Branch: `main`
 Scope: repository implementation and local build only. This report does not certify production readiness.
 
 ## Acceptance rules and test environment
@@ -13,16 +13,16 @@ Checks completed for the current web implementation:
 | Check | Result | Evidence / limit |
 |---|---|---|
 | TypeScript and workspace typecheck | PASS | `npm run lint` |
-| Unit, API and PostgreSQL integration tests | PASS (local) | 19 passed against a temporary PostgreSQL 16 and Valkey service; includes RFQ/authentication persistence flows |
+| Unit, API and PostgreSQL integration tests | PARTIAL PASS (local) | Current API PostgreSQL suite: 8/8 passed, including source-gated PIM submission, maker-checker, engineer approval, admin publication, public visibility and RFQ association. Earlier unit/API baseline had 19 passing tests; a full current root `npm test` run is still pending. |
 | Next.js production build | PASS | `npm run build:web` |
 | API build | PASS | `npm run build:api` |
 | Worker build | PASS | included in canonical `npm run build` |
-| Production browser journeys | PARTIAL PASS | Against the local production Compose stack, Playwright Chromium 8/8 and Firefox 8/8 pass (16/16). Includes geo/preference routing, localized HTML, RFQ submission, protected admin login, persisted RFQ status change, PIM draft creation, automatic CATL Sync source registration, archive/source disable, logout, 404 and responsive checks. Customer/partner flows remain absent. |
+| Production browser journeys | PARTIAL PASS | Against the current local Next/API runtime, Playwright Chromium 9/9 and Firefox 9/9 pass (18/18). Includes geo/preference routing, localized HTML, public RFQ, persisted calculator → RFQ with unchanged values, protected admin login/status change, PIM draft creation, source registration, disabled pre-sync review, revision history, archive/source disable, logout, 404 and responsive checks. Customer/partner flows remain absent. |
 | Responsive viewport checks | PARTIAL PASS | Home has no horizontal overflow at 320, 375, 390, 430, 768, 1024, 1366 and 1920 px in Chromium and Firefox. Foldable, 200% zoom, orientation, catalog/product responsive matrix, and real device checks are pending. |
 | WebKit/Safari | BLOCKED locally | Browser engine installed; launch fails because this environment lacks WebKit OS dependencies. CI now runs `playwright install --with-deps chromium firefox webkit`, but that hosted run has not been observed. |
-| PostgreSQL-backed journeys | PASS (local only) | Migrations `0001`–`0012` ran on ephemeral PostgreSQL 16. Integration tests cover protected PIM draft create/update/archive, official CATL host validation, audit, revision increment, linked Sync source registration/disable and public invisibility. A browser RFQ was stored with attribution/status, dispatched by BullMQ and delivered to local Mailpit; CRM remained `PENDING` because no endpoint is configured. |
-| Docker/Compose production images | PASS (local only) | Current web/API/migration runner/worker images built, migrations completed, and full local stack became healthy. No staging deployment was performed. |
-| Actual PIM data and source review | FAIL / unavailable | No reviewed CATL products/documents are seeded; public catalog correctly remains empty |
+| PostgreSQL-backed journeys | PASS (local only) | Migrations `0001`–`0015` ran successfully on a fresh temporary PostgreSQL database; current API tests ran against local Compose PostgreSQL. A calculation snapshot was saved and attached to its RFQ. Earlier Compose acceptance stored a browser RFQ, dispatched it to local Mailpit and recorded audit; CRM remained `PENDING` because no endpoint is configured. |
+| Docker/Compose production images | PARTIAL | The previous revision's web/API/migration runner/worker images and local stack were verified. Current web/API source builds pass, but rebuilding the updated Docker images ran out of local disk. No staging deployment was performed. |
+| Actual PIM data and source review | FAIL / unavailable | The workflow supports human approval against a successful snapshot, but no real CATL product/document has been reviewed. Public catalog correctly remains empty. A page snapshot and manual note are not claim-level verification. |
 | Supplied visual reference | PARTIAL | Public home, product list and compare visual language now uses the supplied dark energy hero/navigation, white catalog, dark solution/engineering blocks and industrial schematic art. Exact image assets are not available; unverified specs and demo metrics were not copied. Admin has a separate compact control-center design; customer/partner screens are absent. |
 | Locale detection | PASS (unit + HTTP smoke) | Five unit cases pass. Production server returned `/` redirects: UA→`/uk-UA`, CN→`/zh-CN`, browser `zh-CN`→`/zh-CN`, saved EN preference→`/en`; country selection consumes only Vercel/Cloudflare edge headers. |
 | Locale coverage | FAIL / partial | Localized home pages exist; approved translated product reads are gated by PIM. Most public routes are UK-only; `/zh-CN/bess` currently returns 404. Full UK/EN/ZH page parity and semantic translations remain blocking. |
@@ -50,7 +50,7 @@ Responsive/browser gates are partial. Chromium and Firefox exercise the responsi
 | Industry details `/[locale]/industries/[slug]` | PARTIAL | Several Ukrainian templates/pages exist; some requested sectors, sourced unique content, real case studies, and localization are missing. |
 | Engineering hub `/[locale]/engineering` | PARTIAL | Ukrainian directory/status page; most linked engineering tools remain unavailable. |
 | BESS Designer `/[locale]/bess-designer` | PARTIAL | Honest status page links to preliminary sizing; no six-step wizard, saved project, PDF, BOM, catalog selection, or customer workspace integration. |
-| BESS calculator `/[locale]/engineering/bess-calculator` | PARTIAL | Deterministic versioned API calculation and connected form. Does not choose a product, include losses, or persist a project. Ukrainian only. |
+| BESS calculator `/[locale]/engineering/bess-calculator` | PARTIAL | Deterministic versioned calculation persists input/result/locale snapshots. The saved ID passes into RFQ and mismatched values are rejected. It does not choose a product, include losses, or persist a customer project. |
 | LCOS `/[locale]/engineering/lcos` | PARTIAL | Deterministic versioned LCOS API and connected input/result/sensitivity form. No chart, saved scenario, verified project financial inputs, or localized UX. |
 | ROI `/[locale]/engineering/roi` | FAIL | Informational availability note only; no calculator. |
 | Backup runtime `/[locale]/engineering/backup-runtime` | FAIL | Informational note only; no interactive calculator. |
@@ -99,6 +99,6 @@ Responsive/browser gates are partial. Chromium and Firefox exercise the responsi
 
 ## Release decision
 
-**FINAL STATUS: NOT PRODUCTION READY.** A protected admin control center now supports RFQ status, sync review, audit browsing and PIM draft authoring. Admin RFQ and PIM draft boundaries pass local API/browser tests. Most requested public pages remain partial or absent; product publication approval and fact-level provenance are incomplete; customer/partner portals, reviewed product data and legal operator details are unavailable; WebKit/Safari, the full device/browser matrix, visual regression, accessibility/performance, backup/restore, staging, domain deployment and rollback have not passed.
+**FINAL STATUS: NOT PRODUCTION READY.** A protected admin control center supports RFQ status, sync review, audit browsing and a human PIM publication workflow. Local API, migration and Chromium/Firefox checks cover the implemented path. Most requested public pages remain partial or absent; claim-level provenance, reviewed product data and legal operator details are unavailable; customer/partner portals, WebKit/Safari, the full device/browser matrix, visual regression, accessibility/performance, backup/restore, staging, domain deployment and rollback have not passed.
 
 No production deployment to `catl.site` was made. There are no production credentials/configuration, and the current release gates do not pass.

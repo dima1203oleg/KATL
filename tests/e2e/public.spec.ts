@@ -58,6 +58,28 @@ test('RFQ form submits through the web API and confirms the persisted request', 
   await expect(page.getByText(/RFQ-[0-9a-f-]{36}/i)).toBeVisible();
 });
 
+test('BESS calculation is saved and carried into RFQ without changing its inputs', async ({ page }) => {
+  await page.goto('/uk-UA/engineering/bess-calculator');
+  await page.getByLabel('Потужність навантаження, MW').fill('0.5');
+  await page.getByLabel('Тривалість, години').fill('2');
+  await page.getByLabel('Резерв енергії, %').fill('0');
+  await page.getByLabel('PV потужність, MW (контекст)').fill('0');
+  await page.getByRole('button', { name: /Розрахувати/ }).click();
+  await expect(page.getByText('bess-energy-sizing-v2')).toBeVisible();
+  const transfer = page.getByRole('link', { name: /Передати параметри в RFQ/ });
+  await expect(transfer).toHaveAttribute('href', /calculationId=[0-9a-f-]{36}/i);
+  await transfer.click();
+  await expect(page.getByLabel('Потрібна потужність, kW')).toHaveValue('500');
+  await expect(page.getByLabel('Потрібна енергія, kWh')).toHaveValue('1000');
+  await page.getByLabel(/компанія/i).fill('Calculator Journey QA');
+  await page.getByRole('textbox', { name: /контактна особа/i }).fill('Engineering QA');
+  await page.getByLabel(/email/i).fill('calculator-journey@example.test');
+  await page.getByLabel(/телефон/i).fill('+380000000004');
+  await page.getByLabel(/обробку контактних даних/).check();
+  await page.getByRole('button', { name: /Надіслати запит/ }).click();
+  await expect(page.getByRole('heading', { name: 'Запит зареєстровано' })).toBeVisible();
+});
+
 test('mobile layout fits viewport and provides the primary RFQ action', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/uk-UA');
@@ -137,6 +159,9 @@ test('admin login opens the protected RFQ queue and records a status change', as
   const draftRow = page.locator('tr').filter({ hasText: productId });
   await expect(draftRow).toBeVisible();
   await expect(draftRow.getByText('DRAFT', { exact: true })).toBeVisible();
+  await expect(draftRow.getByRole('button', { name: /На перевірку/ })).toBeDisabled();
+  await draftRow.getByRole('button', { name: /Історія ревізій/ }).click();
+  await expect(page.locator('.pim-revision-history')).toContainText('CREATED');
 
   await page.getByRole('button', { name: 'CATL Sync' }).click();
   await expect(page.getByRole('heading', { name: 'Офіційні джерела CATL' })).toBeVisible();
