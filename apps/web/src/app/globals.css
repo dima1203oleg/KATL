@@ -63,7 +63,7 @@ body{overflow-wrap:anywhere}
 @media(prefers-reduced-motion:reduce){.energy-model-card,.energy-featured,.energy-solution,.button{transition:none}.energy-model-card:hover,.energy-featured:hover,.energy-solution:hover,.button:hover{transform:none}}
 
 /* iPhone viewport and navigation refinements: keep the product content clear of fixed overlays. */
-@media(max-width:767px){.mobile-cta{display:none!important}.site-footer{padding-bottom:calc(24px + env(safe-area-inset-bottom))}.energy-hero-copy{max-width:680px}.energy-hero-copy h1{font-size:clamp(38px,8vw,48px);line-height:1.06}.energy-designer-art{isolation:isolate}.energy-designer-art:before{content:'';position:absolute;inset:0;background:linear-gradient(0deg,#04172baf,#04172b20),url('/design/energy-landscape.webp') center/cover;z-index:-1}.energy-designer-art>img{display:none}}
+@media(max-width:767px){.mobile-cta{display:flex!important}.site-footer{padding-bottom:calc(105px + env(safe-area-inset-bottom))}.energy-hero-copy{max-width:680px}.energy-hero-copy h1{font-size:clamp(38px,8vw,48px);line-height:1.06}.energy-designer-art{isolation:isolate}.energy-designer-art:before{content:'';position:absolute;inset:0;background:linear-gradient(0deg,#04172baf,#04172b20),url('/design/energy-landscape.webp') center/cover;z-index:-1}.energy-designer-art>img{display:none}}
 @media(min-width:768px){.energy-hero-copy{max-width:680px}.energy-hero-copy h1{font-size:clamp(40px,4.2vw,62px)}}
 @supports(height:100dvh){.energy-model-dialog{max-height:calc(100dvh - 40px)}.mobile-nav[data-open=true]{max-height:calc(100dvh - 62px - env(safe-area-inset-top))}}
 
