@@ -287,12 +287,31 @@ test('PostgreSQL login, RFQ lifecycle, and audit close end to end', { skip: !pro
       method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify(stagedPayload),
     });
     assert.equal(stagedResponse.status, 201);
-    const staged = await stagedResponse.json() as { data: { id: string; status: string; base_revision: number } };
+    let staged = await stagedResponse.json() as { data: { id: string; status: string; base_revision: number } };
     assert.equal(staged.data.status, 'DRAFT');
     const duplicateStaged = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions`, {
       method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify(stagedPayload),
     });
     assert.equal(duplicateStaged.status, 409);
+    const foreignCancellation = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions/${staged.data.id}/cancel`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: engineerCookie }, body: '{}',
+    });
+    assert.equal(foreignCancellation.status, 409);
+    const cancelled = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions/${staged.data.id}/cancel`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: '{}',
+    });
+    assert.equal(cancelled.status, 200);
+    assert.equal((await cancelled.json() as { data: { status: string } }).data.status, 'CANCELLED');
+    const cancellationAudit = await pool.query(
+      `SELECT action FROM audit_logs WHERE entity='Product' AND entity_id=$1 AND details->>'stagedRevisionId'=$2 AND action='PIM_STAGED_REVISION_CANCELLED'`,
+      [publishProductId, staged.data.id]
+    );
+    assert.deepEqual(cancellationAudit.rows, [{ action: 'PIM_STAGED_REVISION_CANCELLED' }]);
+    const replacementStaged = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: sessionCookie }, body: JSON.stringify(stagedPayload),
+    });
+    assert.equal(replacementStaged.status, 201);
+    staged = await replacementStaged.json() as { data: { id: string; status: string; base_revision: number } };
     const stillLiveBeforeReview = await fetch(`http://127.0.0.1:${address.port}/api/v1/products/${publishProductId}`);
     assert.equal((await stillLiveBeforeReview.json() as { data: { name: string } }).data.name, liveProduct.data.name);
     const stagedReview = await fetch(`http://127.0.0.1:${address.port}/api/v1/admin/products/${publishProductId}/staged-revisions/${staged.data.id}/submit-review`, {

@@ -12,7 +12,7 @@ On 2026-10-02, Sites version 13 was reviewed as the current visual reference. It
 - Ukrainian, English and Simplified Chinese public shell and metadata.
 - The existing root locale selection remains in place: trusted CDN country headers select Ukrainian for Ukraine and Chinese for China; saved preference and browser language determine other visits.
 
-The catalog and comparison update was committed to the existing PR branch. `npm run lint`, `npm run build:web`, 15 unit tests, and the focused catalog/comparison E2E test in Chromium and Firefox passed locally. Local WebKit could not launch because this execution host lacks its system libraries; the GitHub Actions run is the cross-engine gate. The catalog currently shows an honest empty state until product records are reviewed and published in PIM.
+The catalog and comparison update is on the existing PR branch. It keeps filters and comparison selection connected to published PIM data. Current test evidence for this branch is maintained in `docs/implementation/PAGE_ACCEPTANCE_REPORT.md`; the current branch has not yet passed GitHub Actions. The catalog remains honestly empty until products are sourced, reviewed, and published in PIM.
 
 ## Preserved and checked
 
@@ -32,3 +32,17 @@ For each design update, review the reference, map changes to existing modules, i
 ## Limits
 
 This import does not configure a GitHub-connected public deployment or change the currently published Sites deployment. A deployment from GitHub requires a configured production host and release pipeline. The local build and smoke checks do not certify the full site as production-ready.
+
+## Latest KATL handoff — 2026-10-02
+
+**Sites reference / KATL routes:** the last reviewed Sites version remains the visual reference for the existing home, catalog, product detail, and comparison direction. This work did not add new visual sections from Sites; no new Sites design input was provided. The Next.js catalog and comparison remain backed by published PIM records and retain an empty state when there are no approved products.
+
+**KATL functional work:** added cancellation of an unsubmitted staged PIM revision. The creator can cancel their own draft; an administrator can cancel any draft. API and audit records keep the action attributable, cancellation releases the open revision slot, and the published product is unchanged. The admin control now exposes this action with confirmation and honest API error handling.
+
+**Changed files:** `packages/database/migrations/0018_pim_staged_revision_cancellation.sql`, `apps/api/src/app.ts`, `apps/web/src/components/admin/AdminWorkspace.tsx`, `apps/web/src/components/admin/PimManager.tsx`, `playwright.config.ts`, `tests/integration/api.test.ts`, `tests/e2e/public.spec.ts`, plus the readiness and acceptance reports.
+
+**Verification:** fresh isolated PostgreSQL migrations `0001`–`0018` PASS; `npm run lint` PASS; `npm test` 23/23 PASS; `npm run build` PASS; Playwright 24/24 PASS across Chromium and Firefox, including the cancellation flow. This branch's current WebKit/CI run, staging, production, backup/restore, and physical-device checks remain pending.
+
+**Remaining differences / blockers:** no human-reviewed CATL product is published, so the catalog and product detail pages have no real product records. The Sites reference imagery is conceptual and its technical metrics, stock, certificates, and claims are not production data. No new visual differences were reconciled in this stage. CMS, full locale translation, partner/customer portals, PDF evidence extraction, full staged review/publish browser journey, and deployment gates remain incomplete.
+
+**Next concrete step:** obtain and review an official CATL product source/datasheet through the PIM source workflow, create a sourced draft, and have an independent engineer review it. After approval, verify the real product in catalog/detail/compare. For the next design handoff, provide the changed Sites version and identify its target page; continue with one page at a time.

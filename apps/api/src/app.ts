@@ -440,6 +440,7 @@ app.get('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req:
     `SELECT p.id, p.name, p.family, p.category, p.product_type, p.short_desc, p.highlight, p.status, p.source_url,
       p.verified_at, p.verified_by, p.confidence, p.revision, p.updated_at, evidence.snapshot_id AS latest_source_snapshot_id,
       staged.id AS staged_revision_id, staged.status AS staged_revision_status, staged.base_revision AS staged_base_revision,
+      staged.created_by_id AS staged_created_by_id,
       COALESCE(facts.data,'{}'::jsonb) AS fact_sources,
       s.energy_specs, s.cell_specs, s.mechanical_specs, s.thermal_specs, s.safety_specs, s.compatibility
      FROM pim_products p JOIN pim_specifications s ON s.product_id = p.id
@@ -449,7 +450,7 @@ app.get('/api/v1/admin/products', requireRoles(...PIM_EDITOR_ROLES), async (req:
        ORDER BY ss.captured_at DESC LIMIT 1
      ) evidence ON true
      LEFT JOIN LATERAL (
-       SELECT id,status,base_revision FROM pim_product_staged_revisions sr
+       SELECT id,status,base_revision,created_by_id FROM pim_product_staged_revisions sr
        WHERE sr.product_id=p.id AND sr.status IN ('DRAFT','REVIEW','APPROVED')
        ORDER BY sr.created_at DESC LIMIT 1
      ) staged ON true
@@ -793,6 +794,33 @@ app.get('/api/v1/admin/products/:id/staged-revisions/:revisionId', requireRoles(
   );
   if (!rows[0]) return res.status(404).json({ error: 'STAGED_REVISION_NOT_FOUND' });
   return res.json({ data: rows[0] });
+});
+
+app.post('/api/v1/admin/products/:id/staged-revisions/:revisionId/cancel', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {
+  const actor = (req as any).authUser;
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE pim_product_staged_revisions SET status='CANCELLED',updated_at=NOW()
+       WHERE id=$1 AND product_id=$2 AND status='DRAFT'
+         AND (created_by_id=$3 OR $4::boolean)
+       RETURNING id,status,base_revision`,
+      [req.params.revisionId,req.params.id,actor.id,['SUPER_ADMIN','ADMIN'].includes(actor.role)]
+    );
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'STAGED_REVISION_NOT_CANCELLABLE', message: 'Скасувати можна лише власну staged-чернетку або чернетку адміністратор може скасувати незалежно від автора.' });
+    }
+    await client.query(
+      `INSERT INTO audit_logs (id,action,entity,entity_id,actor,details)
+       VALUES ($1,'PIM_STAGED_REVISION_CANCELLED','Product',$2,$3,$4::jsonb)`,
+      [`AUD-${randomUUID()}`,req.params.id,actor.name,JSON.stringify({ stagedRevisionId: result.rows[0].id, baseRevision: result.rows[0].base_revision })]
+    );
+    await client.query('COMMIT');
+    return res.json({ data: result.rows[0] });
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
 });
 
 app.post('/api/v1/admin/products/:id/staged-revisions/:revisionId/submit-review', requireRoles(...PIM_EDITOR_ROLES), async (req: Request, res: Response) => {

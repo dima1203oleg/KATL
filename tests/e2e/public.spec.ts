@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { Pool } from 'pg';
 
 test('localized home pages render useful server HTML', async ({ page }) => {
   for (const [path, lang, heading] of [
@@ -209,4 +211,65 @@ test('admin login opens the protected RFQ queue and records a status change', as
 
   await page.getByRole('button', { name: 'Вийти' }).click();
   await expect(page.getByRole('heading', { name: 'Вхід до адмінпанелі' })).toBeVisible();
+});
+
+test('PIM admin can cancel a staged draft without changing its published product', async ({ page }) => {
+  const email = process.env.KATL_USER_EMAIL;
+  const password = process.env.KATL_USER_PASSWORD;
+  const databaseUrl = process.env.DATABASE_URL;
+  test.skip(!email || !password || !databaseUrl, 'Requires an isolated PostgreSQL database and provisioned ephemeral admin.');
+
+  const pool = new Pool({ connectionString: databaseUrl });
+  const productId = `e2e-cancel-${randomUUID()}`;
+  const sourceId = `SRC-${productId}`;
+  const sourceUrl = `https://www.catl.com/en/testing/${productId}`;
+  const fixtureName = `E2E-only staged cancellation fixture ${productId}`;
+  try {
+    const admin = await pool.query('SELECT id FROM users WHERE lower(email)=lower($1)', [email]);
+    expect(admin.rowCount).toBe(1);
+    await pool.query(
+      `INSERT INTO pim_products (id,name,family,category,short_desc,highlight,status,product_type,source_url,verified_at,verified_by,confidence,revision,created_by)
+       VALUES ($1,$2,'TEST ONLY','Utility-scale ESS','Test fixture, not a CATL claim.','Isolated browser fixture.','PUBLISHED','TEST_ONLY',$3,NOW(),'E2E fixture','ENGINEER_REVIEWED',1,$4)`,
+      [productId, fixtureName, sourceUrl, admin.rows[0].id]
+    );
+    await pool.query(
+      `INSERT INTO pim_specifications (product_id,energy_specs,cell_specs,mechanical_specs,thermal_specs,safety_specs,compatibility)
+       VALUES ($1,'{}','{}','{}','{}','{}','{}')`, [productId]
+    );
+    await pool.query(
+      `INSERT INTO sync_sources (id,name,url,source_type,product_id,enabled) VALUES ($1,$2,$3,'OFFICIAL_WEB',$4,true)`,
+      [sourceId, fixtureName, sourceUrl, productId]
+    );
+    await pool.query(
+      `INSERT INTO sync_snapshots (source_id,source_url,content_hash,raw_payload,http_status,content_type,size_bytes)
+       VALUES ($1,$2,$3,'Test-only fixture snapshot with no product specifications.',200,'text/html',48)`,
+      [sourceId, sourceUrl, randomUUID()]
+    );
+    await pool.query(
+      `INSERT INTO pim_product_staged_revisions (product_id,base_revision,payload,created_by_id)
+       VALUES ($1,1,$2::jsonb,$3)`,
+      [productId, JSON.stringify({ id: productId, name: fixtureName, family: 'TEST ONLY', category: 'Utility-scale ESS', productType: 'TEST_ONLY', shortDesc: '', highlight: '', sourceUrl, energySpecs: {}, cellSpecs: {}, mechanicalSpecs: {}, thermalSpecs: {}, safetySpecs: {}, compatibility: {}, factSources: {} }), admin.rows[0].id]
+    );
+
+    await page.goto('/uk-UA/admin');
+    await page.getByLabel('Email').fill(email!);
+    await page.getByLabel('Пароль').fill(password!);
+    await page.getByRole('button', { name: 'Увійти' }).click();
+    await expect(page.getByRole('heading', { name: 'Огляд' })).toBeVisible();
+    await page.getByRole('button', { name: 'PIM', exact: true }).click();
+    const row = page.locator('tr').filter({ hasText: productId });
+    await expect(row).toContainText('DRAFT');
+    page.once('dialog', (dialog) => dialog.accept());
+    await row.getByRole('button', { name: 'Скасувати чернетку' }).click();
+    await expect(page.getByRole('status')).toContainText('скасовано');
+    const publicProduct = await page.request.get(`/api/v1/products/${productId}`);
+    expect(publicProduct.status()).toBe(200);
+    expect((await publicProduct.json()).data.name).toBe(fixtureName);
+    await expect(row.getByRole('button', { name: 'Нова ревізія' })).toBeVisible();
+  } finally {
+    await pool.query("DELETE FROM audit_logs WHERE entity='Product' AND entity_id=$1", [productId]);
+    await pool.query('DELETE FROM pim_products WHERE id=$1', [productId]);
+    await pool.query('DELETE FROM sync_sources WHERE id=$1', [sourceId]);
+    await pool.end();
+  }
 });
