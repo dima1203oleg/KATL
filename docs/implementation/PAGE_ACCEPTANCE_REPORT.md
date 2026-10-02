@@ -2,9 +2,9 @@
 
 Date: 2026-10-02
 Branch: `main`
-Scope: implementation based on GitHub `main` commit `d6d1030` plus uncommitted milestone `0016` on 2026-10-02. This report does not certify production readiness.
+Scope: GitHub `main` commit `03149d5` on 2026-10-02. This report does not certify production readiness.
 
-Latest verification delta: migration `0016` applied successfully to local Compose PostgreSQL; unit tests pass 15/15, PostgreSQL integration tests pass 8/8 including fact evidence rejection/approval/public citation, `npm run lint` and API/worker/web production builds pass. Chromium and Firefox acceptance pass 18/18 including the PIM citation workflow’s no-snapshot UI state. Local WebKit could not launch because this environment lacks GTK 4, Graphene, HarfBuzz ICU, Manette, Hyphen and GLESv2 libraries. GitHub Actions for this source change is pending.
+Latest verification: migration `0016` applied to local Compose PostgreSQL; unit tests 15/15, PostgreSQL integration 8/8 including fact evidence rejection/approval/public citation, `npm run lint`, and all workspace/root builds pass. Chromium/Firefox browser acceptance passes 18/18 including the PIM citation editor’s no-snapshot state. GitHub Actions run `37002416586` for this commit passed fresh migrations, unit/integration tests, production build, Chromium/Firefox/WebKit E2E, all three Docker image builds, and dependency audit. Local WebKit cannot launch because this environment lacks GTK 4, Graphene, HarfBuzz ICU, Manette, Hyphen and GLESv2 libraries; this does not affect the passing CI WebKit run.
 
 ## Acceptance rules and test environment
 
@@ -15,15 +15,15 @@ Checks completed for the current web implementation:
 | Check | Result | Evidence / limit |
 |---|---|---|
 | TypeScript and workspace typecheck | PASS | `npm run lint` |
-| Unit, API and PostgreSQL integration tests | PASS | Local unit suite: 15/15. Current API PostgreSQL suite: 8/8, including missing/incorrect per-fact evidence rejection, engineer verification, public fact citation, source-gated publication and persisted calculation-to-RFQ association. GitHub Actions for milestone `0016` is pending. |
+| Unit, API and PostgreSQL integration tests | PASS | Local unit suite: 15/15. Current API PostgreSQL suite: 8/8, including missing/incorrect per-fact evidence rejection, engineer verification, public fact citation, source-gated publication and persisted calculation-to-RFQ association. GitHub Actions run `37002416586` passes these steps on a clean database. |
 | Next.js production build | PASS | `npm run build:web` |
 | API build | PASS | `npm run build:api` |
 | Worker build | PASS | included in canonical `npm run build` |
 | Production browser journeys | PARTIAL PASS | Against the current local Next/API runtime, Playwright Chromium 9/9 and Firefox 9/9 pass (18/18). Includes geo/preference routing, localized HTML, public RFQ, persisted calculator → RFQ with unchanged values, protected admin login/status change, PIM draft creation, source registration, citation editor and no-snapshot warning, disabled pre-sync review, revision history, archive/source disable, logout, 404 and responsive checks. Customer/partner flows remain absent. |
 | Responsive viewport checks | PARTIAL PASS | Home has no horizontal overflow at 320, 375, 390, 430, 768, 1024, 1366 and 1920 px in Chromium and Firefox. Foldable, 200% zoom, orientation, catalog/product responsive matrix, and real device checks are pending. |
-| WebKit/Safari | BLOCKED locally; physical Safari untested | Local launch lacks GTK 4, Graphene, HarfBuzz ICU, Manette, Hyphen and GLESv2. Previous GitHub Actions acceptance passed WebKit before this source change; the current commit must rerun it. No physical iPhone/iPad Safari verification yet. |
+| WebKit/Safari | CI PASS; physical Safari untested | Current GitHub Actions run `37002416586` passed WebKit. Local launch lacks GTK 4, Graphene, HarfBuzz ICU, Manette, Hyphen and GLESv2. No physical iPhone/iPad Safari verification yet. |
 | PostgreSQL-backed journeys | PASS (local only) | Migrations `0001`–`0015` passed on a fresh temporary PostgreSQL database; `0016` applied to local Compose PostgreSQL. Current API tests ran against local Compose PostgreSQL. A calculation snapshot was saved and attached to its RFQ. Earlier Compose acceptance stored a browser RFQ, dispatched it to local Mailpit and recorded audit; CRM remained `PENDING` because no endpoint is configured. |
-| Docker/Compose production images | PASS in CI; local rebuild blocked | GitHub Actions built the current API, worker and web images. Local Docker rebuild ran out of disk. No staging deployment was performed. |
+| Docker/Compose production images | PASS in CI; local rebuild blocked | Current GitHub Actions run built the API, worker and web images. Local Docker rebuild ran out of disk. No staging deployment was performed. |
 | Actual PIM data and source review | FAIL / unavailable | The workflow now requires per-fact excerpts from the latest successful HTML snapshot and exposes verified citations publicly. No real CATL product/document has been reviewed; PDF text extraction is not implemented. Public catalog correctly remains empty. |
 | Supplied visual reference | PARTIAL | Public home, product list and compare visual language now uses the supplied dark energy hero/navigation, white catalog, dark solution/engineering blocks and industrial schematic art. Exact image assets are not available; unverified specs and demo metrics were not copied. Admin has a separate compact control-center design; customer/partner screens are absent. |
 | Locale detection | PASS (unit + HTTP smoke) | Five unit cases pass. Production server returned `/` redirects: UA→`/uk-UA`, CN→`/zh-CN`, browser `zh-CN`→`/zh-CN`, saved EN preference→`/en`; country selection consumes only Vercel/Cloudflare edge headers. |
@@ -32,7 +32,7 @@ Checks completed for the current web implementation:
 
 The legacy Vite/React application remains in the repository as a migration reference. It must stay until its screens have passed functional, data, design, route/SEO, regression, and browser parity in Next.js. The root build currently checks both the legacy bundle and canonical Next/API/worker workspaces.
 
-Responsive/browser gates are partial. Chromium and Firefox exercise the responsive home through 1920 px and 404/locale/catalog/RFQ flows, including a persisted RFQ on the full local Compose stack. GitHub Actions passed Chromium, Firefox and WebKit projects. Required coverage still includes 2560–3440 px, foldable and landscape, 200% zoom, real safe-area devices, Chrome/Edge/Opera, Android browsers and in-app WebViews. Visual-regression baselines are not configured.
+Responsive/browser gates are partial. Chromium and Firefox exercise the responsive home through 1920 px and 404/locale/catalog/RFQ flows, including a persisted RFQ on the full local Compose stack. GitHub Actions passed Chromium, Firefox and WebKit projects for the current commit. Required coverage still includes 2560–3440 px, foldable and landscape, 200% zoom, real safe-area devices, Chrome/Edge/Opera, Android browsers and in-app WebViews. Visual-regression baselines are not configured.
 
 ## Public route inventory
 
@@ -101,6 +101,6 @@ Responsive/browser gates are partial. Chromium and Firefox exercise the responsi
 
 ## Release decision
 
-**FINAL STATUS: NOT PRODUCTION READY.** A protected admin control center supports RFQ status, sync review, audit browsing and a human PIM publication workflow. Local API, migration and Chromium/Firefox checks cover the implemented path. Most requested public pages remain partial or absent; claim-level provenance, reviewed product data and legal operator details are unavailable; customer/partner portals, WebKit/Safari, the full device/browser matrix, visual regression, accessibility/performance, backup/restore, staging, domain deployment and rollback have not passed.
+**FINAL STATUS: NOT PRODUCTION READY.** A protected admin control center supports RFQ status, sync review, audit browsing and fact-cited PIM publication; current-commit CI passes all three browser engines. Most requested public pages remain partial or absent; no real CATL product has completed source review and legal operator details are unavailable; customer/partner portals, physical-device validation, the full device/browser matrix, visual regression, accessibility/performance, backup/restore, staging, domain deployment and rollback have not passed.
 
 No production deployment to `catl.site` was made. There are no production credentials/configuration, and the current release gates do not pass.

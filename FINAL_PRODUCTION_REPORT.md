@@ -57,16 +57,16 @@ Added migrations `0003` through `0015` for sessions/RFQ history, attribution, ro
 |---|---|---|
 | `npm ci` | PASS | Clean dependency installation completed. |
 | Lint/typecheck | PASS | Root, API, worker, and web checks completed. |
-| Current API integration suite | PASS (local Compose PostgreSQL) | 8/8 tests passed, including publication workflow, persisted calculation snapshots and calculation-to-RFQ association/value matching. Bundled from current source and run inside the API container to use its private database credentials. |
-| Current Next.js build | PASS | `npm run build:web` completed after calculation-to-RFQ changes. |
-| Current API build | PASS | `npm run build:api` completed; its bundle was copied into the running local API container for acceptance. Current Docker image rebuild remains blocked by disk capacity. |
-| Clean database migrations | PASS (temporary local database) | Migration runner applied `0001`–`0015` on a fresh PostgreSQL database; the temporary database was dropped after verification. |
-| Unit/API/integration tests | PASS (local) | `npm test`: 19 passed against PostgreSQL 16 and Valkey; includes RFQ lifecycle and auth/audit persistence. Not yet observed in GitHub Actions. |
-| Production builds | PASS | Current commit passed the GitHub Actions production build and API/worker/web container builds. Local `npm run build:web` and `npm run build:api` also pass. Legacy Vite remains retained pending parity and reports a 642.57 kB minified JS chunk warning. |
+| Current API integration suite | PASS (local and CI) | 8/8 tests passed, including per-fact evidence rejection/approval/public citation, publication workflow, calculation snapshots and calculation-to-RFQ association/value matching. Current commit passes against clean CI PostgreSQL and local Compose PostgreSQL. |
+| Current Next.js build | PASS | `npm run build:web` and the GitHub Actions production build passed. |
+| Current API / worker builds | PASS | API and worker workspace builds passed locally and in current GitHub Actions. |
+| Clean database migrations | PASS (local and CI) | Migration runner applied through `0016` on the fresh GitHub Actions PostgreSQL service; `0016` was also applied to local Compose PostgreSQL. |
+| Unit/API/integration tests | PASS (local and CI) | Local `npm test`: 23/23 passed against PostgreSQL 16 and Redis. Current GitHub Actions unit/integration step passed. |
+| Production builds | PASS | Current GitHub Actions run passed production build and API/worker/web container builds. Local root `npm run build` passed. Legacy Vite remains retained pending parity and reports a 642.57 kB minified JS chunk warning. |
 | Compose configuration and local stack | PASS (ephemeral local) | Full PostgreSQL, Valkey, migration, API, worker, Mailpit and Next web stack started; readiness and migration gating passed. This is not staging or production. |
 | Docker image builds | CI PASS; local rebuild blocked by disk | GitHub Actions built current API, worker and web images successfully. Rebuilding locally exhausted disk even after cache cleanup; existing volumes/data were preserved. |
-| GitHub Actions | PASS | [Run 36982476784](https://github.com/dima1203oleg/KATL/actions/runs/36982476784): lint/typecheck, migrations, unit/integration, production build, browser acceptance, API/worker/web container builds, dependency audit all passed. |
-| Browser acceptance / Playwright | PARTIAL PASS | Current local Next/API runtime: Chromium 9/9 and Firefox 9/9 pass (18/18), including persisted calculation → RFQ with unchanged values, locale routing, public RFQ, protected admin login/status change, PIM review/publish UI, 404 and responsive checks through 1920 px. The CI browser acceptance step passed with Chromium, Firefox and WebKit. No real iOS/Android device matrix or visual regression baseline yet. |
+| GitHub Actions | PASS | [Run 37002416586](https://github.com/dima1203oleg/KATL/actions/runs/37002416586) for commit `03149d5`: lint/typecheck, clean migrations through `0016`, unit/integration, production build, browser acceptance, API/worker/web container builds and dependency audit all passed. |
+| Browser acceptance / Playwright | PASS in CI; partial device coverage | Current local Next/API runtime: Chromium 9/9 and Firefox 9/9 pass (18/18), including persisted calculation → RFQ, locale routing, public RFQ, protected admin, PIM citation editor, 404 and responsive checks through 1920 px. Current CI WebKit/Chromium/Firefox acceptance passed. No real iOS/Android device matrix or visual regression baseline yet. |
 | Locale routing HTTP smoke | PASS | Root redirects to Ukrainian for UA edge country, Chinese for CN, browser preference for a supported language, and saved preference; `/en` rendered 200 and `/zh-CN/bess` rendered 404 (translation coverage is incomplete). |
 | Dependency security audit | PASS | `npm audit --audit-level=high`: zero vulnerabilities. |
 | AI provider failover | NOT RUN | No provider credentials were supplied; only NOT_CONFIGURED/error behavior is implemented. |
@@ -82,7 +82,7 @@ Added migrations `0003` through `0015` for sessions/RFQ history, attribution, ro
 - The web app now has a public route foundation, but many routes are status pages or incomplete flows. Catalog content is intentionally empty until reviewed PIM entities are published. Customer/partner/admin portals, CMS, localization workflow, RAG, semantic SEO operations, and full search acceptance remain incomplete.
 - PIM now requires claim-level evidence from captured official CATL HTML snapshots and exposes approved citations with published facts. PDF text extraction is not implemented, and no real CATL product has yet completed a human review. Published-product staged revisions, customer/partner portals, CMS, localization workflow, RAG and much of admin remain incomplete.
 - Translation jobs, document processing, and SEO background jobs return explicit unconfigured-handler failures instead of fake success.
-- There is no production Playwright gate result from GitHub Actions, staging environment, checked restore, production monitoring deployment, or verified rollback run. Local browser tests do not substitute for real iOS Safari/Android/WebView validation.
+- Current-commit Playwright CI passed, but no staging deployment, checked restore, production monitoring deployment, or verified rollback run exists. Automated browser tests do not substitute for real iOS Safari/Android/WebView validation.
 - Product Sync snapshots still lack S3/MinIO object storage; the admin can review extracted changes, but source crawling/extraction coverage and engineering fact approval are incomplete.
 
 ## Deployment procedure (not yet executed)
@@ -104,10 +104,10 @@ Added migrations `0003` through `0015` for sessions/RFQ history, attribution, ro
 ## Blocking release gates
 
 - Run the complete Docker Compose stack and queue workflows in staging against production-equivalent PostgreSQL/Redis.
-- Enable WebKit dependencies in a runnable CI environment and pass the WebKit/Safari suite; add full device and visual regression evidence.
+- Add full device and visual regression evidence; the current CI WebKit suite already passes.
 - Complete the missing public routes and customer, partner, and admin workflows, plus CMS, localization, RAG, document storage, and reviewed catalog acceptance.
 - Complete real CATL source review/catalog ingestion and PDF evidence extraction; implement staged revisions for published products.
-- Expand browser coverage from the 16 passing Chromium/Firefox checks to the complete page/workflow matrix; pass WebKit, visual regression, accessibility and performance gates.
+- Expand browser coverage from the current 18 Chromium/Firefox checks to the complete page/workflow matrix; add visual regression, accessibility and performance gates.
 - Verify real CATL sources and snapshots, document processing, AI provider fallback, SMTP, and CRM delivery.
 - Rebuild current Docker images after provisioning enough disk; configure staging and production deploy credentials, run CI, backup/restore, deployment smoke tests, and rollback drill.
 - Provide a compatible host/registry and a temporary domain for this Dockerized Next.js + API + PostgreSQL + Redis + worker stack; the connected Sites host cannot run this monorepo without replacing its backend and persistence architecture. `catl.site` currently returns HTTP 503.

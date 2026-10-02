@@ -1,6 +1,6 @@
 # KATL master gap matrix
 
-Audit basis: local working tree based on repository `main` commit `d6d1030` on 2026-10-02 adds migration `0016`, fact-level source excerpts, human verification state, and public API citations to the earlier PIM review/publication, history, sync guard, and calculation→RFQ flow. Verified locally: migration `0016` applied to the Compose PostgreSQL database; unit 15/15; PostgreSQL integration 8/8; lint/typecheck; API/worker/web production builds. Cross-browser CI has not yet run for this change. This remains a gap analysis, not a production certification.
+Audit basis: repository `main` commit `03149d5` on 2026-10-02 adds migration `0016`, fact-level source excerpts, human verification state, and public API citations to the earlier PIM review/publication, history, sync guard, and calculation→RFQ flow. Verified locally: migration `0016` applied to Compose PostgreSQL; unit 15/15; PostgreSQL integration 8/8; lint/typecheck; API/worker/web and root production builds; Chromium/Firefox 18/18. GitHub Actions run `37002416586` passed clean migrations, unit/integration, build, Chromium/Firefox/WebKit E2E, API/worker/web image builds, and dependency audit. Physical devices, staging and production remain unverified.
 
 ## Status key
 
@@ -19,7 +19,7 @@ Statuses can be combined. Presence of an interface, package, route, test filenam
 
 | Module | Status | Evidence in current tree | Gap / next gate |
 |---|---|---|---|
-| Next.js public web | PARTIAL | Localized home, BESS, product listing/detail, compare, solutions, industries, RFQ, search, documents, BESS sizing and LCOS routes build. `/` chooses saved preference, trusted edge country (UA→uk-UA, CN→zh-CN), browser language, then uk-UA. Chromium and Firefox pass 8/8 each (16 total) for public and tested admin flows; responsive home has checks from 320–1920 px. | Many requested routes are content/status pages, catalogue has no reviewed products, most page translations are incomplete. WebKit, accessibility, performance, real device/ultra-wide and visual regression acceptance remain. Geo routing requires the CDN to overwrite trusted country headers. |
+| Next.js public web | PARTIAL | Localized home, BESS, product listing/detail, compare, solutions, industries, RFQ, search, documents, BESS sizing and LCOS routes build. `/` chooses saved preference, trusted edge country (UA→uk-UA, CN→zh-CN), browser language, then uk-UA. Chromium/Firefox local pass 18/18; current GitHub CI passes Chromium/Firefox/WebKit. Responsive home has checks from 320–1920 px. | Many requested routes are content/status pages, catalogue has no reviewed products, most page translations are incomplete. Physical-device Safari/Android, accessibility, performance, ultra-wide and visual regression acceptance remain. Geo routing requires the CDN to overwrite trusted country headers. |
 | Legacy React/Vite UI | LEGACY, MOCK, UNTESTED | `src/App.tsx`, `src/components/katl/*`, `src/data/titanPlatformData.ts`; root `build:legacy` bundles it. The UI contains product, portals, designer, BOM/proposal and AI screens. | The screens use local state and hardcoded/demonstration data. Do not delete until the migration matrix below reaches parity; separately classify useful interaction patterns versus unsafe data/actions. |
 | Root Express/JSON persistence | LEGACY / REMOVED IN LOCAL HEAD | The current local commit removed root `server.ts` and `src/server/db/database.ts`; `apps/api` and PostgreSQL are canonical. | Verify Vite UI does not silently depend on deleted endpoints/storage. Do not restore a second production database. |
 | API | PARTIAL | Health, auth, published PIM reads, restricted PIM draft list/create/edit/review/approval/publish, BESS/LCOS, RFQ/status, sync review/trigger, AI, localization, jobs, audit, search, documents and CRM webhook routes exist. PIM enforces stationary-ESS category and official source host; fact evidence is matched against the exact successful source snapshot; public product reads return reviewed citations. | The central router is still large; error contract/OpenAPI and domain modules are absent. Published-product staged revisions, CMS and portal APIs are missing. |
@@ -46,7 +46,7 @@ Statuses can be combined. Presence of an interface, package, route, test filenam
 | Notifications | PARTIAL | SMTP dispatch ran to ephemeral local Mailpit during RFQ queue acceptance; unconfigured production status is not reported as success. | No real provider credentials, delivery/complaint monitoring, complete templates, retry/idempotency acceptance or password reset. |
 | Security | PARTIAL, UNTESTED | Helmet, CORS allowlist, validation, rate limits, password/session path, role guards and secret examples exist. | No current automated security scan evidence, CSRF/CSP/HSTS acceptance, SSRF test matrix, file-upload defenses, MFA or tenant isolation. |
 | Observability / backup / DR | PARTIAL / UNTESTED | Health routes, structured worker logs and deployment/runbook notes exist. | No traces/metrics dashboards/alerts, production request propagation, automated DB/object backup or restore drill. |
-| CI / Docker | PARTIAL | GitHub Actions run `36982476784` passed lint/typecheck, migrations, tests, production build, Chromium/Firefox/WebKit E2E, API/worker/web image builds and dependency audit. Local Chromium/Firefox acceptance passed 18/18. | Rebuilding current images ran out of local disk. Visual regression, staging and production deployment stack are unverified. |
+| CI / Docker | PARTIAL | GitHub Actions run `37002416586` for commit `03149d5` passed lint/typecheck, fresh migrations through `0016`, tests, production build, Chromium/Firefox/WebKit E2E, API/worker/web image builds and dependency audit. Local Chromium/Firefox acceptance passed 18/18. | Rebuilding current images ran out of local disk. Visual regression, staging and production deployment stack are unverified. |
 | Production release | MISSING | No production credentials, staging, domain deployment or rollback evidence. | All blocking release gates; see [`FINAL_PRODUCTION_REPORT.md`](../FINAL_PRODUCTION_REPORT.md). |
 
 ## Legacy-to-Next migration matrix
@@ -78,17 +78,16 @@ No legacy screen is considered migrated based on similar-looking UI alone. `N` i
 
 ## Immediate P0 sequence
 
-1. Apply migrations `0011`–`0015` from a clean database in CI; local clean migration passed, while the current Docker rebuild ran out of disk before a repeatable image rebuild.
-2. Test and deploy migration `0016` through CI; conduct human review against real official CATL HTML/PDF sources and build an approved catalog.
-3. Add staged revisions for published products; the Sync worker now blocks direct changes, pending a safe public revision path.
-4. Add semantic-core import/validation and reviewed seed clusters without invented search volumes.
-5. Resolve canonical URL policy and build metadata/sitemap/robots from published registry data; verify HTML, 404s, alternates and filter noindex rules.
-6. Add Search Console/Bing and citation observation adapters only after account access is configured.
-7. Keep Vite UI until every legacy screen has accepted Next parity; only then schedule removal with redirect and regression evidence.
+1. CI has applied migrations through `0016` from a clean PostgreSQL database; conduct human review against real official CATL HTML/PDF sources and build an approved catalog.
+2. Add staged revisions for published products; the Sync worker blocks direct changes, but safe draft/review/publish of a published product is still missing.
+3. Add semantic-core import/validation and reviewed seed clusters without invented search volumes.
+4. Resolve canonical URL policy and build metadata/sitemap/robots from published registry data; verify HTML, 404s, alternates and filter noindex rules.
+5. Add Search Console/Bing and citation observation adapters only after account access is configured.
+6. Keep Vite UI until every legacy screen has accepted Next parity; only then schedule removal with redirect and regression evidence.
 
 ## Responsive and browser acceptance
 
-The CSS includes fluid container gutters, safe-area spacing, a responsive layout, reduced-motion handling, and an orientation fallback. These are implementation details, not cross-device proof. Release acceptance still requires Playwright against Chromium, WebKit, and Firefox plus visual checks at 320, 360, 375, 390, 393, 412, 430, 600, 768, 820, 1024, 1280, 1366, 1440, 1920, 2560, and 3440 px, portrait/landscape, 200% zoom, keyboard, and touch. Safari/iOS, Android browsers, and in-app WebViews are currently **UNTESTED**. CI has no passing cross-browser or visual-regression gate.
+The CSS includes fluid container gutters, safe-area spacing, a responsive layout, reduced-motion handling, and an orientation fallback. These are implementation details, not cross-device proof. GitHub Actions has a passing Chromium, WebKit and Firefox gate for commit `03149d5`; local WebKit could not launch because this host lacks GTK/Graphene/HarfBuzz ICU/Manette/Hyphen/GLESv2. Release acceptance still requires visual checks at 320, 360, 375, 390, 393, 412, 430, 600, 768, 820, 1024, 1280, 1366, 1440, 1920, 2560, and 3440 px, portrait/landscape, 200% zoom, keyboard and touch. Physical Safari/iOS, Android browsers, and in-app WebViews are **UNTESTED**; visual-regression tests are not configured.
 
 ## Release statement
 
