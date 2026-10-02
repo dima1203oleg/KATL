@@ -3,13 +3,13 @@ import { expect, test } from '@playwright/test';
 test('localized home pages render useful server HTML', async ({ page }) => {
   for (const [path, lang, heading] of [
     ['/uk-UA', 'uk-UA', 'Енергія під контролем. Сильніша Україна.'],
-    ['/en', 'en', 'Energy storage systems for real project needs'],
-    ['/zh-CN', 'zh-CN', '面向实际项目需求的储能系统'],
+    ['/en', 'en', 'Energy under control. A stronger future.'],
+    ['/zh-CN', 'zh-CN', '掌控能源。共建更强大的未来。'],
   ]) {
     const response = await page.goto(path);
     expect(response?.status()).toBe(200);
     await expect(page.locator('html')).toHaveAttribute('lang', lang);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(heading);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('aria-label', heading);
   }
 });
 

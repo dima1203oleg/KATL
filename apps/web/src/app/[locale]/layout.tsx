@@ -5,12 +5,21 @@ import '../globals.css';
 import { PublicShell } from '../../components/SiteShell';
 
 const locales = ['uk-UA', 'en', 'zh-CN'];
-export const metadata: Metadata = {
+const baseMetadata: Metadata = {
   metadataBase: new URL(process.env.PUBLIC_SITE_URL || 'https://catl.site'),
-  title: { default: 'KATL — CATL Energy Storage в Україні', template: '%s | KATL' },
+  title: { default: 'CATL Energy Storage в Україні', template: '%s | CATL Energy Storage' },
   description: 'Каталог, інженерні інструменти та інформація про системи накопичення енергії для проєктів в Україні.',
-  openGraph: { siteName: 'KATL', type: 'website' },
+  openGraph: { siteName: 'CATL Energy Storage Україна', type: 'website' },
 };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const localized = locale === 'en'
+    ? { title: 'CATL Energy Storage in Ukraine', description: 'CATL energy storage systems, engineering tools and project information for Ukraine.' }
+    : locale === 'zh-CN'
+      ? { title: 'CATL 乌克兰储能', description: '面向乌克兰项目的 CATL 储能系统、工程工具和项目信息。' }
+      : { title: 'CATL Energy Storage в Україні', description: 'Системи накопичення енергії CATL, інженерні інструменти та інформація для проєктів в Україні.' };
+  return { ...baseMetadata, title: { default: localized.title, template: `%s | CATL Energy Storage` }, description: localized.description, openGraph: { ...baseMetadata.openGraph, siteName: localized.title, locale } };
+}
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 export function generateStaticParams() { return locales.map((locale) => ({ locale })); }
 
