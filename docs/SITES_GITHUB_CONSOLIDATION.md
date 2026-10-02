@@ -2,15 +2,17 @@
 
 The code in this repository is the canonical implementation. The separate ChatGPT Sites project is a published snapshot and does not automatically synchronize edits with GitHub.
 
-On 2026-10-02, the compatible public website design work from the Sites source was merged into the current `main` implementation. The Sites source was based on an older KATL commit, so its public pages were adapted onto the newer PIM-backed routes rather than replacing the repository. The user uses the Sites tab to explore visual design; it is a design reference, not a second implementation or a catalog editor.
+On 2026-10-02, Sites version 13 was reviewed as the current visual reference. Its design is being integrated incrementally in the KATL Next.js app on the existing feature branch; it has not been merged to `main` yet. The Sites source was based on an older KATL commit, so its visual decisions are adapted onto the newer PIM-backed routes instead of replacing the repository. The user uses the Sites tab to explore visual design; it is a design reference, not a second implementation or a catalog editor.
 
 ## Imported
 
-- CATL-branded responsive shell, typography, homepage and catalog styling.
+- CATL-branded responsive shell, typography, homepage, catalog and product detail presentation.
 - Design reference images, visibly disclosed as concept illustrations.
-- Updated catalog, product comparison and product detail presentation.
+- Catalog category/specification filters and product comparison selection, backed by published PIM records.
 - Ukrainian, English and Simplified Chinese public shell and metadata.
 - The existing root locale selection remains in place: trusted CDN country headers select Ukrainian for Ukraine and Chinese for China; saved preference and browser language determine other visits.
+
+The catalog and comparison update was committed to the existing PR branch. `npm run lint`, `npm run build:web`, 15 unit tests, and the focused catalog/comparison E2E test in Chromium and Firefox passed locally. Local WebKit could not launch because this execution host lacks its system libraries; the GitHub Actions run is the cross-engine gate. The catalog currently shows an honest empty state until product records are reviewed and published in PIM.
 
 ## Preserved and checked
 
