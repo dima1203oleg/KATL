@@ -46,6 +46,18 @@ test('catalog and RFQ routes expose usable empty states and labelled inputs', as
   await expect(page.getByLabel(/компан/i)).toBeVisible();
 });
 
+test('unreviewed BESS translations remain reachable but are excluded from indexing', async ({ page }) => {
+  for (const [path, heading, robots] of [
+    ['/en/bess', 'This page is not yet available in a reviewed English version.', 'noindex, follow'],
+    ['/zh-CN/bess', '此页面暂未提供经过审核的中文版本。', 'noindex, follow'],
+  ] as const) {
+    const response = await page.goto(path);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', robots);
+  }
+});
+
 test('RFQ form submits through the web API and confirms the persisted request', async ({ page }) => {
   await page.goto('/uk-UA/rfq?utm_source=playwright');
   await page.getByLabel(/компан/i).fill('Playwright QA Company');

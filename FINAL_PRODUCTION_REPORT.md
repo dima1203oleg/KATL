@@ -46,6 +46,7 @@ The repository contained a Vite application and an incomplete Next.js/API/worker
 - Extended the official source allowlist to CATL's global and China domains (`catl.com` and `catl.com.cn`, including subdomains). Admin Sync shows registered sources and reviewable changes; crawler snapshots remain limited to basic extraction and have not been live-verified against CATL.
 - Closed the local admin workflow in Chromium and Firefox: create PIM draft → see registered CATL source → verify review is disabled until a source snapshot exists → inspect revision history → archive draft → verify source is disabled. PostgreSQL integration covers source-gated review, maker-checker, approval, publication, public visibility, RFQ association and protection from direct Sync changes to published data.
 - Added durable BESS sizing results: each calculation stores its algorithm version, inputs, result and locale in PostgreSQL. RFQ can reference that immutable calculation; the API rejects missing or mismatched IDs/values. The calculator carries the saved calculation into the RFQ form.
+- Corrected `/en/bess` and `/zh-CN/bess`: unsupported translations now show the reviewed-language notice and carry `noindex,follow` metadata instead of returning 404. Added a browser regression test for both locales.
 
 ## Database migrations
 
@@ -66,8 +67,9 @@ Added migrations `0003` through `0015` for sessions/RFQ history, attribution, ro
 | Compose configuration and local stack | PASS (ephemeral local) | Full PostgreSQL, Valkey, migration, API, worker, Mailpit and Next web stack started; readiness and migration gating passed. This is not staging or production. |
 | Docker image builds | CI PASS; local rebuild blocked by disk | GitHub Actions built current API, worker and web images successfully. Rebuilding locally exhausted disk even after cache cleanup; existing volumes/data were preserved. |
 | GitHub Actions | PASS | [Run 37002416586](https://github.com/dima1203oleg/KATL/actions/runs/37002416586) for commit `03149d5`: lint/typecheck, clean migrations through `0016`, unit/integration, production build, browser acceptance, API/worker/web container builds and dependency audit all passed. |
-| Browser acceptance / Playwright | PASS in CI; partial device coverage | Current local Next/API runtime: Chromium 9/9 and Firefox 9/9 pass (18/18), including persisted calculation → RFQ, locale routing, public RFQ, protected admin, PIM citation editor, 404 and responsive checks through 1920 px. Current CI WebKit/Chromium/Firefox acceptance passed. No real iOS/Android device matrix or visual regression baseline yet. |
-| Locale routing HTTP smoke | PASS | Root redirects to Ukrainian for UA edge country, Chinese for CN, browser preference for a supported language, and saved preference; `/en` rendered 200 and `/zh-CN/bess` rendered 404 (translation coverage is incomplete). |
+| Latest local verification (working tree based on `a263195`) | PASS | `npm run lint`; full `npm run build` for legacy, Next.js, API and worker; `npm test` 23/23 on a newly-created isolated PostgreSQL database; `npm audit --audit-level=high` reports zero vulnerabilities. |
+| Browser acceptance / Playwright | PASS for Chromium and Firefox; WebKit BLOCKED locally | Latest targeted acceptance: 20/20 tests pass across Chromium and Firefox, including RFQ persistence/admin flow, responsive widths, and the new English/Chinese BESS fallback test. The full three-engine run passed Chromium/Firefox (18 tests) but could not launch the 9 WebKit tests because this host lacks GTK 4, Graphene, HarfBuzz ICU, Manette, Hyphen and GLESv2 libraries. Earlier CI run `37002416586` passed all three engines for commit `03149d5`; CI must rerun against the current patch. No physical iOS/Android device matrix or visual-regression baseline yet. |
+| Locale routing HTTP smoke | PASS for tested routes | Root locale negotiation unit tests pass for Ukraine, China, saved preference and browser language. `/en/bess` and `/zh-CN/bess` now return 200 with localized review notices and `noindex,follow`; these routes are not represented as published translations. |
 | Dependency security audit | PASS | `npm audit --audit-level=high`: zero vulnerabilities. |
 | AI provider failover | NOT RUN | No provider credentials were supplied; only NOT_CONFIGURED/error behavior is implemented. |
 | CATL source verification | NOT RUN | No live fetch or source-content review was performed. |
@@ -82,7 +84,7 @@ Added migrations `0003` through `0015` for sessions/RFQ history, attribution, ro
 - The web app now has a public route foundation, but many routes are status pages or incomplete flows. Catalog content is intentionally empty until reviewed PIM entities are published. Customer/partner/admin portals, CMS, localization workflow, RAG, semantic SEO operations, and full search acceptance remain incomplete.
 - PIM now requires claim-level evidence from captured official CATL HTML snapshots and exposes approved citations with published facts. PDF text extraction is not implemented, and no real CATL product has yet completed a human review. Published-product staged revisions, customer/partner portals, CMS, localization workflow, RAG and much of admin remain incomplete.
 - Translation jobs, document processing, and SEO background jobs return explicit unconfigured-handler failures instead of fake success.
-- Current-commit Playwright CI passed, but no staging deployment, checked restore, production monitoring deployment, or verified rollback run exists. Automated browser tests do not substitute for real iOS Safari/Android/WebView validation.
+- Earlier Playwright CI passed on commit `03149d5`; the latest local BESS-locale fix has not yet been run by GitHub CI. No staging deployment, checked restore, production monitoring deployment, or verified rollback run exists. Automated browser tests do not substitute for real iOS Safari/Android/WebView validation.
 - Product Sync snapshots still lack S3/MinIO object storage; the admin can review extracted changes, but source crawling/extraction coverage and engineering fact approval are incomplete.
 
 ## Deployment procedure (not yet executed)
@@ -104,7 +106,7 @@ Added migrations `0003` through `0015` for sessions/RFQ history, attribution, ro
 ## Blocking release gates
 
 - Run the complete Docker Compose stack and queue workflows in staging against production-equivalent PostgreSQL/Redis.
-- Add full device and visual regression evidence; the current CI WebKit suite already passes.
+- Run CI for the latest route/test patch, then add full device and visual-regression evidence. Historical WebKit CI passed on commit `03149d5`; local WebKit cannot launch in this host.
 - Complete the missing public routes and customer, partner, and admin workflows, plus CMS, localization, RAG, document storage, and reviewed catalog acceptance.
 - Complete real CATL source review/catalog ingestion and PDF evidence extraction; implement staged revisions for published products.
 - Expand browser coverage from the current 18 Chromium/Firefox checks to the complete page/workflow matrix; add visual regression, accessibility and performance gates.
