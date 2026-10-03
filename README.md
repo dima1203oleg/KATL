@@ -2,6 +2,12 @@
 
 KATL is a Next.js web application, a canonical Express API, and a background worker for a CATL/BESS product and engineering platform focused on Ukraine. The repository is under active implementation and is **not production ready**. The current route-level evidence and known gaps are tracked in [`docs/implementation/PAGE_ACCEPTANCE_REPORT.md`](docs/implementation/PAGE_ACCEPTANCE_REPORT.md) and [`FINAL_PRODUCTION_REPORT.md`](FINAL_PRODUCTION_REPORT.md).
 
+## Public site
+
+**CATL ESS Україна:** https://catl-ess-ukraine.dima1203gmail-com.chatgpt.site
+
+The public site is the deployed web presentation associated with this project. The GitHub repository contains the source code and engineering artifacts.
+
 The public catalog reads only published PIM records from the API. No unverified CATL product data is seeded. The BESS sizing and LCOS tools are deterministic preliminary calculations; neither selects equipment nor substitutes for engineering design or a quote.
 
 ## Workspaces
