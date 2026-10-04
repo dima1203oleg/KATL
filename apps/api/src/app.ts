@@ -1085,28 +1085,67 @@ app.get('/api/v1/search', async (req: Request, res: Response) => {
   const query = String(req.query.q || '').trim().slice(0, 100);
   const locale = canonicalLocale(req.query.locale);
   if (query.length < 2) return res.json({ query, locale, total: 0, results: [] });
-  const { rows } = await getDatabasePool().query(
+
+  const tokens = query.toLowerCase().split(/\s+/).filter((t) => t.length > 0);
+  const pool = getDatabasePool();
+
+  // Search in products
+  const productRows = await pool.query(
     `SELECT p.id, COALESCE(t.name, p.name) AS title, p.category,
       COALESCE(t.short_desc, p.short_desc) AS snippet
      FROM pim_products p
      LEFT JOIN pim_product_translations t ON t.product_id = p.id AND t.locale = $2
      WHERE p.status = 'PUBLISHED'
-       AND ($2 = 'uk-UA' OR (t.translation_status = 'PUBLISHED' AND t.source_revision = p.revision AND t.specifications <> '{}'::jsonb))
        AND (
-       POSITION(lower($1) IN lower(COALESCE(t.name, p.name))) > 0 OR
-       POSITION(lower($1) IN lower(p.family)) > 0 OR
-       POSITION(lower($1) IN lower(p.category)) > 0 OR
-       POSITION(lower($1) IN lower(COALESCE(t.short_desc, p.short_desc))) > 0 OR
-       POSITION(lower($1) IN lower(COALESCE(t.highlight, p.highlight))) > 0
-     ) ORDER BY p.name LIMIT 25`,
-    [query, locale]
+         POSITION(lower($1) IN lower(COALESCE(t.name, p.name))) > 0 OR
+         POSITION(lower($1) IN lower(p.family)) > 0 OR
+         POSITION(lower($1) IN lower(p.category)) > 0 OR
+         POSITION(lower($1) IN lower(COALESCE(t.short_desc, p.short_desc))) > 0 OR
+         POSITION(lower($1) IN lower(COALESCE(t.highlight, p.highlight))) > 0
+       )
+     ORDER BY p.name LIMIT 20`,
+    [tokens[0], locale]
   );
+
+  // Search in documents
+  const docRows = await pool.query(
+    `SELECT d.id, d.title, d.document_type, d.locale, d.source_url, p.name AS product_name
+     FROM documents d
+     LEFT JOIN pim_products p ON p.id = d.product_id
+     WHERE d.published = true
+       AND (
+         POSITION(lower($1) IN lower(d.title)) > 0 OR
+         POSITION(lower($1) IN lower(COALESCE(p.name, ''))) > 0
+       )
+     ORDER BY d.title LIMIT 10`,
+    [tokens[0]]
+  );
+
+  const productResults = productRows.rows.map((p: any) => ({
+    type: 'product',
+    id: p.id,
+    title: p.title,
+    category: p.category,
+    snippet: p.snippet,
+    url: `/${locale}/products/${p.id}`,
+  }));
+
+  const docResults = docRows.rows.map((d: any) => ({
+    type: 'document',
+    id: d.id,
+    title: `${d.title} (${d.document_type})`,
+    category: d.product_name || 'Technical Document',
+    snippet: `Офіційна технічна документація CATL · ${d.document_type} · ${d.locale}`,
+    url: d.source_url || `/${locale}/documents`,
+  }));
+
+  const combined = [...productResults, ...docResults];
+
   res.json({
-    query, locale, total: rows.length,
-    results: rows.map((product: any) => ({
-      type: 'product', id: product.id, title: product.title, category: product.category,
-      snippet: product.snippet, url: `/${locale}/products/${product.id}`,
-    })),
+    query,
+    locale,
+    total: combined.length,
+    results: combined,
   });
 });
 
@@ -1117,7 +1156,7 @@ app.get('/api/v1/documents', async (req: Request, res: Response) => {
     `SELECT d.id, d.title, d.document_type, d.locale, d.version, d.source_url,
       d.checksum_sha256, d.mime_type, d.size_bytes, p.name AS product_name
      FROM documents d LEFT JOIN pim_products p ON p.id = d.product_id
-     WHERE d.published = true AND d.locale = $1 AND ($2::text IS NULL OR d.product_id = $2) ORDER BY d.title`,
+     WHERE d.published = true AND (d.locale = $1 OR d.locale = 'en' OR d.locale = 'uk-UA') AND ($2::text IS NULL OR d.product_id = $2) ORDER BY d.title`,
     [locale, productId]
   );
   res.json({ documents: rows, total: rows.length });

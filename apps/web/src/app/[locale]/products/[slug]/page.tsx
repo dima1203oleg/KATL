@@ -24,7 +24,13 @@ export default async function ProductDetailPage({params}:Props){
  const {locale,slug}=await params;
  if(!['uk-UA','en','zh-CN'].includes(locale))notFound();
  let product;
- try{product=await pimRepository.getProductBySlug(slug,locale);}catch{return <main className="container content-section"><div className="error-note">Каталог тимчасово недоступний. Спробуйте пізніше.</div></main>;}
+ let documents: import('../../../../lib/pim/pimRepository').KatlDocument[] = [];
+ try{
+   product=await pimRepository.getProductBySlug(slug,locale);
+   if(product) {
+     documents = await pimRepository.getDocuments(locale, product.id);
+   }
+ }catch{return <main className="container content-section"><div className="error-note">Каталог тимчасово недоступний. Спробуйте пізніше.</div></main>;}
  if(!product)notFound();
- return <TenerProductDetailView product={product} locale={locale}/>;
+ return <TenerProductDetailView product={product} locale={locale} documents={documents}/>;
 }

@@ -18,6 +18,19 @@ async function request<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export interface KatlDocument {
+  id: string;
+  title: string;
+  document_type: string;
+  locale: string;
+  version: string;
+  source_url: string;
+  checksum_sha256: string;
+  mime_type: string;
+  size_bytes: string | number;
+  product_name?: string;
+}
+
 /** The Next.js web app reads PIM data only through the canonical API. */
 export const pimRepository = {
   async getAllProducts(locale = 'uk-UA', filters: { category?: string; type?: string } = {}): Promise<KatlProduct[]> {
@@ -36,6 +49,17 @@ export const pimRepository = {
     } catch (error) {
       if ((error as Error).message === 'PIM_NOT_FOUND') return null;
       throw error;
+    }
+  },
+
+  async getDocuments(locale = 'uk-UA', productId?: string): Promise<KatlDocument[]> {
+    const params = new URLSearchParams({ locale });
+    if (productId) params.set('product', productId);
+    try {
+      const response = await request<{ documents: KatlDocument[]; total: number }>(`/api/v1/documents?${params}`);
+      return response.documents || [];
+    } catch {
+      return [];
     }
   },
 };

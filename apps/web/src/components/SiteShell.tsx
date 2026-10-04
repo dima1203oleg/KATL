@@ -5,10 +5,67 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { BatteryCharging, BookOpen, BriefcaseBusiness, ChevronDown, Globe2, Menu, Search, X, Zap } from 'lucide-react';
 
-const translations: Record<string, Record<string,string>> = {
-  'uk-UA': {products:'Продукція',solutions:'Рішення',industries:'Галузі',engineering:'Інженерія',knowledge:'База знань',partners:'Партнерам',about:'Про нас',quote:'Отримати пропозицію',account:'Кабінет',search:'Пошук',all:'Усі опубліковані продукти',designer:'BESS Designer'},
-  en: {products:'Products',solutions:'Solutions',industries:'Industries',engineering:'Engineering',knowledge:'Knowledge',partners:'Partners',about:'About',quote:'Request a proposal',account:'Account',search:'Search',all:'Published products',designer:'BESS Designer'},
-  'zh-CN': {products:'产品',solutions:'解决方案',industries:'行业',engineering:'工程',knowledge:'知识库',partners:'合作伙伴',about:'关于我们',quote:'获取方案',account:'账户',search:'搜索',all:'已发布产品',designer:'BESS 设计器'},
+const translations: Record<string, Record<string, string>> = {
+  'uk-UA': {
+    products: 'Продукція',
+    catalog: 'Каталог систем CATL',
+    compare: 'Порівняння BESS',
+    documents: 'Технічна документація',
+    solutions: 'Рішення',
+    industries: 'Галузі',
+    engineering: 'Інженерія',
+    bessCalculator: 'Калькулятор ємності BESS',
+    lcosCalculator: 'LCOS & Окупність',
+    sldDiagram: 'Однолінійні схеми (SLD)',
+    knowledge: 'База знань',
+    partners: 'Партнерам',
+    about: 'Про нас',
+    quote: 'Отримати ТКП',
+    account: 'Кабінет',
+    search: 'Пошук',
+    all: 'Усі сертифіковані системи',
+    designer: 'BESS Designer',
+  },
+  en: {
+    products: 'Products',
+    catalog: 'CATL Systems Catalog',
+    compare: 'BESS Comparison',
+    documents: 'Technical Documents',
+    solutions: 'Solutions',
+    industries: 'Industries',
+    engineering: 'Engineering',
+    bessCalculator: 'BESS Sizing Calculator',
+    lcosCalculator: 'LCOS & Payback ROI',
+    sldDiagram: 'Single-Line Diagrams (SLD)',
+    knowledge: 'Knowledge',
+    partners: 'Partners',
+    about: 'About',
+    quote: 'Request TKP',
+    account: 'Account',
+    search: 'Search',
+    all: 'All certified systems',
+    designer: 'BESS Designer',
+  },
+  'zh-CN': {
+    products: '产品',
+    catalog: 'CATL 系统产品目录',
+    compare: '系统规格对比',
+    documents: '技术图纸与文档',
+    solutions: '解决方案',
+    industries: '行业',
+    engineering: '工程工具',
+    bessCalculator: 'BESS 容量选型计算',
+    lcosCalculator: 'LCOS 度电成本与回报',
+    sldDiagram: '单线电气原理图 (SLD)',
+    knowledge: '知识库',
+    partners: '合作伙伴',
+    about: '关于我们',
+    quote: '获取技术方案',
+    account: '账户',
+    search: '搜索',
+    all: '全系列认证产品',
+    designer: 'BESS 设计器',
+  },
 };
 
 export function SiteHeader() {
@@ -27,46 +84,183 @@ export function SiteHeader() {
   const locale = pathname.split('/')[1] || 'uk-UA';
   const root = `/${locale}`;
   const t = translations[locale] || translations['uk-UA'];
-  const nav = [
-    { label:t.solutions, href:`${root}/solutions` }, { label:t.industries, href:`${root}/industries` },
-    { label:t.engineering, href:`${root}/engineering` }, { label:t.knowledge, href:`${root}/resources` },
-    { label:t.partners, href:`${root}/partners` }, { label:t.about, href:`${root}/about` },
-  ];
-  return <header className="site-header">
-    <div className="container header-inner">
-      <Link href={root} className="brand" aria-label="CATL — на головну">
-        <span className="brand-wordmark">CATL</span><span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span>
-      </Link>
-      <nav className="primary-nav" aria-label="Головна навігація">
-        <div className="nav-item">
-          <Link className="nav-link" href={`${root}/products`}>{t.products} <ChevronDown size={13} /></Link>
-          <div className="mega-menu">
-            <div>
-              <div className="mega-heading">CATL ESS</div>
-              <Link className="mega-link" href={`${root}/products`}>{t.all}<span>{locale==='en'?'Reviewed product records':locale==='zh-CN'?'经审核的产品记录':'Перевірені записи продуктів'}</span></Link>
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  return (
+    <header className="site-header">
+      <div className="container header-inner">
+        <Link href={root} className="brand" aria-label="CATL — на головну">
+          <span className="brand-wordmark">CATL</span>
+          <span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span>
+        </Link>
+        <nav className="primary-nav" aria-label="Головна навігація">
+          {/* Products Nav Item with Mega Menu */}
+          <div className="nav-item">
+            <Link className={`nav-link ${isActive(`${root}/products`) ? 'is-active' : ''}`} href={`${root}/products`}>
+              {t.products} <ChevronDown size={13} />
+            </Link>
+            <div className="mega-menu">
+              <div>
+                <div className="mega-heading">Каталог та порівняння</div>
+                <Link className="mega-link" href={`${root}/products`}>
+                  {t.catalog}
+                  <span>{locale === 'en' ? 'Tener, EnerOne, EnerC+, EnerX, Commercial' : locale === 'zh-CN' ? 'Tener, EnerOne, EnerC+ 等原厂系统' : 'Tener, EnerOne, EnerC+, EnerX, Комерційні'}</span>
+                </Link>
+                <Link className="mega-link" href={`${root}/compare`}>
+                  {t.compare}
+                  <span>{locale === 'en' ? 'Side-by-side technical and financial specs' : locale === 'zh-CN' ? '多维度参数与性能指标对照' : 'Порівняння характеристик, C-rate, ємності'}</span>
+                </Link>
+                <Link className="mega-link" href={`${root}/documents`}>
+                  {t.documents}
+                  <span>{locale === 'en' ? 'Certificates, datasheets, manuals & drawings' : locale === 'zh-CN' ? '认证证书、技术规格表、用户手册' : 'Паспорти, сертифікати, габаритні креслення'}</span>
+                </Link>
+              </div>
+              <div className="mega-cta">
+                <div>
+                  <div className="mega-heading">Швидкий підбір</div>
+                  <strong>{locale === 'en' ? 'Interactive 3D Configurator' : locale === 'zh-CN' ? '交互式 3D 储能配置器' : 'Інтерактивний конфігуратор'}</strong>
+                  <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 12px' }}>
+                    {locale === 'en' ? 'Generate single-line diagrams, rack layouts and CAPEX.' : locale === 'zh-CN' ? '快速生成系统单线图与预估投资。' : 'Сформуйте конфігурацію, SLD та кошторис за 2 хвилини.'}
+                  </p>
+                </div>
+                <Link className="text-link" href={`${root}/bess-designer`}>{t.designer} →</Link>
+              </div>
             </div>
-            <div className="mega-cta"><div><div className="mega-heading">{locale==='en'?'Need a configuration?':locale==='zh-CN'?'需要配置建议？':'Потрібна конфігурація?'}</div><strong>{locale==='en'?'Start with project inputs':locale==='zh-CN'?'从项目参数开始':'Почніть із параметрів проєкту'}</strong><p style={{fontSize:12,color:'#667085'}}>{locale==='en'?'Request an engineering assessment without assuming product availability.':locale==='zh-CN'?'提交工程评估请求，不预设产品可用性。':'Інженерний запит без припущень про доступність моделі.'}</p></div><Link className="text-link" href={`${root}/bess-designer`}>{t.designer} →</Link></div>
           </div>
+
+          <Link className={`nav-link ${isActive(`${root}/solutions`) ? 'is-active' : ''}`} href={`${root}/solutions`}>
+            {t.solutions}
+          </Link>
+          <Link className={`nav-link ${isActive(`${root}/industries`) ? 'is-active' : ''}`} href={`${root}/industries`}>
+            {t.industries}
+          </Link>
+
+          {/* Engineering Nav Item with Mega Menu */}
+          <div className="nav-item">
+            <Link className={`nav-link ${isActive(`${root}/engineering`) ? 'is-active' : ''}`} href={`${root}/engineering`}>
+              {t.engineering} <ChevronDown size={13} />
+            </Link>
+            <div className="mega-menu">
+              <div>
+                <div className="mega-heading">Інженерний комплекс</div>
+                <Link className="mega-link" href={`${root}/bess-designer`}>
+                  {t.designer}
+                  <span>{locale === 'en' ? 'Visual layout & sizing calculator' : locale === 'zh-CN' ? '可视化系统设计与选型' : 'Візуальний підбір компонування та обладнання'}</span>
+                </Link>
+                <Link className="mega-link" href={`${root}/engineering/bess-calculator`}>
+                  {t.bessCalculator}
+                  <span>{locale === 'en' ? 'Power kW and energy MWh sizing tool' : locale === 'zh-CN' ? '功率与容量精准匹配工具' : 'Розрахунок пікових навантажень та ємності'}</span>
+                </Link>
+                <Link className="mega-link" href={`${root}/engineering/lcos`}>
+                  {t.lcosCalculator}
+                  <span>{locale === 'en' ? 'Levelized cost of storage & payback ROI' : locale === 'zh-CN' ? '度电储能成本与投资回报期' : 'Розрахунок вартості циклу та терміну окупності'}</span>
+                </Link>
+                <Link className="mega-link" href={`${root}/engineering/single-line-diagram`}>
+                  {t.sldDiagram}
+                  <span>{locale === 'en' ? 'Electrical schematic & PCS/BMS topology' : locale === 'zh-CN' ? '电气原理图与拓扑结构' : 'Електрична топологія та підключення до мережі'}</span>
+                </Link>
+              </div>
+              <div className="mega-cta">
+                <div>
+                  <div className="mega-heading">Офіційне ТКП</div>
+                  <strong>{locale === 'en' ? 'Project Feasibility Study' : locale === 'zh-CN' ? '项目可行性研究与正式报价' : 'ТЕО та комерційна пропозиція'}</strong>
+                  <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 12px' }}>
+                    {locale === 'en' ? 'Get engineered proposal with Ukraine tariff analysis.' : locale === 'zh-CN' ? '结合乌克兰最新电价政策量身定制。' : 'Отримайте розрахунок під графік тарифів та ліміти мережі вашого підприємства.'}
+                  </p>
+                </div>
+                <Link className="text-link" href={`${root}/rfq`}>{t.quote} →</Link>
+              </div>
+            </div>
+          </div>
+
+          <Link className={`nav-link ${isActive(`${root}/resources`) ? 'is-active' : ''}`} href={`${root}/resources`}>
+            {t.knowledge}
+          </Link>
+          <Link className={`nav-link ${isActive(`${root}/partner`) ? 'is-active' : ''}`} href={`${root}/partner`}>
+            {t.partners}
+          </Link>
+          <Link className={`nav-link ${isActive(`${root}/about`) ? 'is-active' : ''}`} href={`${root}/about`}>
+            {t.about}
+          </Link>
+        </nav>
+
+        <div className="header-actions">
+          <Link href={`${root}/search`} className="header-search" aria-label="Пошук"><Search size={17}/></Link>
+          <Globe2 className="header-globe" size={14} aria-hidden="true" />
+          <nav className="language-switch" aria-label={locale === 'en' ? 'Language' : locale === 'zh-CN' ? '语言' : 'Мова'}>
+            {[
+              ['uk-UA', 'UA'],
+              ['en', 'EN'],
+              ['zh-CN', '中'],
+            ].map(([target, label]) => (
+              <Link
+                key={target}
+                aria-current={locale === target ? 'page' : undefined}
+                href={`/${target}`}
+                onClick={() => rememberLocale(target)}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <Link className="account-link" href={`${root}/portal`}>{t.account}</Link>
+          <Link className="button" href={`${root}/rfq`}>{t.quote}</Link>
+          <button
+            className="mobile-menu-button"
+            aria-label={open ? (locale === 'en' ? 'Close menu' : locale === 'zh-CN' ? '关闭菜单' : 'Закрити меню') : (locale === 'en' ? 'Open menu' : locale === 'zh-CN' ? '打开菜单' : 'Відкрити меню')}
+            aria-expanded={open}
+            aria-controls="mobile-site-navigation"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <X size={19}/> : <Menu size={19}/>}
+          </button>
         </div>
-        {nav.map((item) => <Link key={item.href} className="nav-link" href={item.href.replace('/uk-UA', root)}>{item.label}</Link>)}
-      </nav>
-      <div className="header-actions">
-        <Link href={`${root}/search`} className="header-search" aria-label="Пошук"><Search size={17}/></Link>
-        <Globe2 className="header-globe" size={14} aria-hidden="true" />
-        <nav className="language-switch" aria-label={locale==='en'?'Language':locale==='zh-CN'?'语言':'Мова'}>{[['uk-UA','UA'],['en','EN'],['zh-CN','中']].map(([target,label])=><Link key={target} aria-current={locale===target?'page':undefined} href={`/${target}`} onClick={()=>rememberLocale(target)}>{label}</Link>)}</nav>
-        <Link className="account-link" href={`${root}/login`}>{t.account}</Link>
-        <Link className="button" href={`${root}/rfq`}>{t.quote}</Link>
-        <button className="mobile-menu-button" aria-label={open?(locale==='en'?'Close menu':locale==='zh-CN'?'关闭菜单':'Закрити меню'):(locale==='en'?'Open menu':locale==='zh-CN'?'打开菜单':'Відкрити меню')} aria-expanded={open} aria-controls="mobile-site-navigation" onClick={() => setOpen(!open)}>{open ? <X size={19}/> : <Menu size={19}/>}</button>
       </div>
-    </div>
-    <nav id="mobile-site-navigation" className="mobile-nav" data-open={open} aria-label={locale==='en'?'Mobile navigation':locale==='zh-CN'?'移动导航':'Мобільна навігація'}>
-      <Link href={`${root}/products`} onClick={() => setOpen(false)}>{t.products}</Link>
-      {nav.map((item) => <Link key={item.href} href={item.href.replace('/uk-UA', root)} onClick={() => setOpen(false)}>{item.label}</Link>)}
-      <Link href={`${root}/search`} onClick={() => setOpen(false)}>{t.search}</Link>
-      <Link href={`${root}/login`} onClick={() => setOpen(false)}>{t.account}</Link>
-      <Link className="button" href={`${root}/rfq`} onClick={() => setOpen(false)}>{t.quote}</Link>
-    </nav>
-  </header>;
+
+      {/* Enhanced Mobile Drawer */}
+      <nav id="mobile-site-navigation" className="mobile-nav" data-open={open} aria-label="Мобільна навігація">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 0' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#005bff', letterSpacing: '0.08em', padding: '0 16px' }}>
+            {t.products}
+          </div>
+          <Link href={`${root}/products`} onClick={() => setOpen(false)}>{t.catalog}</Link>
+          <Link href={`${root}/compare`} onClick={() => setOpen(false)}>{t.compare}</Link>
+          <Link href={`${root}/documents`} onClick={() => setOpen(false)}>{t.documents}</Link>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 0', borderTop: '1px solid #eef2f6' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#005bff', letterSpacing: '0.08em', padding: '0 16px' }}>
+            {t.engineering}
+          </div>
+          <Link href={`${root}/bess-designer`} onClick={() => setOpen(false)}>{t.designer}</Link>
+          <Link href={`${root}/engineering/bess-calculator`} onClick={() => setOpen(false)}>{t.bessCalculator}</Link>
+          <Link href={`${root}/engineering/lcos`} onClick={() => setOpen(false)}>{t.lcosCalculator}</Link>
+          <Link href={`${root}/engineering/single-line-diagram`} onClick={() => setOpen(false)}>{t.sldDiagram}</Link>
+          <Link href={`${root}/engineering`} onClick={() => setOpen(false)}>{t.engineering} (Огляд)</Link>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 0', borderTop: '1px solid #eef2f6' }}>
+          <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#005bff', letterSpacing: '0.08em', padding: '0 16px' }}>
+            Інформація
+          </div>
+          <Link href={`${root}/solutions`} onClick={() => setOpen(false)}>{t.solutions}</Link>
+          <Link href={`${root}/industries`} onClick={() => setOpen(false)}>{t.industries}</Link>
+          <Link href={`${root}/resources`} onClick={() => setOpen(false)}>{t.knowledge}</Link>
+          <Link href={`${root}/partner`} onClick={() => setOpen(false)}>{t.partners}</Link>
+          <Link href={`${root}/about`} onClick={() => setOpen(false)}>{t.about}</Link>
+          <Link href={`${root}/search`} onClick={() => setOpen(false)}>{t.search}</Link>
+          <Link href={`${root}/portal`} onClick={() => setOpen(false)}>{t.account}</Link>
+        </div>
+
+        <div style={{ padding: '16px', borderTop: '1px solid #eef2f6' }}>
+          <Link className="button" style={{ width: '100%' }} href={`${root}/rfq`} onClick={() => setOpen(false)}>
+            {t.quote}
+          </Link>
+        </div>
+      </nav>
+    </header>
+  );
 }
 
 function rememberLocale(locale:string){
@@ -84,7 +278,7 @@ export function SiteFooter() {
         <FooterColumn title={en?'Products':zh?'产品':'Продукція'} links={[[en?'Catalog':zh?'产品目录':'Каталог систем', `/${locale}/products`],[en?'Compare':zh?'对比':'Порівняння', `/${locale}/compare`],[en?'Documents':zh?'文档':'Документи', `/${locale}/documents`]]} />
         <FooterColumn title={en?'Solutions':zh?'解决方案':'Рішення'} links={[[en?'All solutions':zh?'全部解决方案':'Усі рішення', `/${locale}/solutions`],[en?'Industries':zh?'行业':'Для галузей', `/${locale}/industries`],[en?'BESS in Ukraine':zh?'乌克兰储能':'BESS в Україні', `/${locale}/energy-storage-ukraine`]]} />
         <FooterColumn title={en?'Engineering':zh?'工程':'Інженерія'} links={[["BESS Designer", `/${locale}/bess-designer`],[en?'Calculators':zh?'计算器':'Калькулятори', `/${locale}/engineering`],[en?'Knowledge':zh?'知识库':'База знань', `/${locale}/resources`]]} />
-        <FooterColumn title={en?'Company':zh?'公司':'Компанія'} links={[[en?'About this site':zh?'关于本站':'Про сайт', `/${locale}/about`],[en?'Partners':zh?'合作伙伴':'Партнерам', `/${locale}/partners`],[en?'Contact':zh?'联系':'Контакти', `/${locale}/contact`],[en?'Request a proposal':zh?'提交需求':'Запит пропозиції', `/${locale}/rfq`]]} />
+        <FooterColumn title={en?'Company':zh?'公司':'Компанія'} links={[[en?'About this site':zh?'关于本站':'Про сайт', `/${locale}/about`],[en?'Partners':zh?'合作伙伴':'Партнерам', `/${locale}/partner`],[en?'Contact':zh?'联系':'Контакти', `/${locale}/contact`],[en?'Request a proposal':zh?'提交需求':'Запит пропозиції', `/${locale}/rfq`]]} />
       </div>
       <div className="footer-bottom"><span>© {new Date().getFullYear()} catl.site · {en?'KATL platform':zh?'KATL 平台':'платформа KATL'}</span><span>{en?'CATL is the product manufacturer. Partnership status and legal details are published only when confirmed.':zh?'CATL 为产品制造商。合作状态和法律信息仅在确认后发布。':'CATL є виробником продукції. Статус партнерства та юридичні реквізити вказуються лише після підтвердження.'}</span><span><Link href={`/${locale}/privacy`}>{en?'Privacy':zh?'隐私':'Приватність'}</Link> · <Link href={`/${locale}/terms`}>{en?'Terms':zh?'条款':'Умови'}</Link></span></div>
     </div>

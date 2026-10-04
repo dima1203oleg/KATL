@@ -7,9 +7,10 @@ const ukPublicRoutes = [
   '/', '/bess', '/catl-ukraine', '/energy-storage-ukraine', '/products',
   '/solutions', '/solutions/solar-bess', '/solutions/backup-power', '/solutions/peak-shaving',
   '/solutions/energy-arbitrage', '/industries', '/industries/manufacturing',
-  '/industries/agriculture', '/engineering/bess-calculator', '/engineering/lcos',
+  '/industries/agriculture', '/engineering', '/engineering/bess-calculator', '/engineering/lcos',
+  '/engineering/single-line-diagram', '/bess-designer', '/compare', '/documents',
   '/resources', '/resources/guides/how-to-choose-bess', '/resources/glossary',
-  '/rfq',
+  '/partner', '/rfq',
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

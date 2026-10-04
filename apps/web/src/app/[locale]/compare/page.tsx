@@ -1,15 +1,101 @@
-import type {Metadata} from 'next';
+import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import {notFound} from 'next/navigation';
-import {pimRepository} from '../../../lib/pim/pimRepository';
-import type {KatlProduct} from '@katl/shared-types';
+import { notFound } from 'next/navigation';
+import { pimRepository } from '../../../lib/pim/pimRepository';
+import { BessComparator } from '../../../components/BessComparator';
+import { Layers, ArrowLeft } from 'lucide-react';
+import { AnimatedSection, AnimatedStaggerGroup, AnimatedStaggerItem } from '../../../components/AnimatedSection';
 
-export const dynamic='force-dynamic';
-const copy={
- 'uk-UA':{title:'Порівняння систем CATL',description:'Порівняйте опубліковані характеристики систем CATL.',home:'Головна',heading:'Порівняння систем CATL',intro:'Оберіть системи та зіставте їхні технічні параметри для вашого проєкту.',eyebrow:'ТЕХНІЧНЕ ПОРІВНЯННЯ',proof:['Перевірені технічні дані','Порівняння за сценарієм','Джерела в картці продукту'],rows:['Категорія','Номінальна енергія','Корисна енергія','Потужність / C-rate','ККД','Хімія','Охолодження','Габарити','Маса','Захист','Сертифікати'],ask:'Запитати проєкт →',empty:'Додайте продукти до порівняння',emptyText:'Виберіть опублікований запис у каталозі. Для порівняння потрібні опубліковані технічні картки.',catalog:'До каталогу →',unavailable:'Каталог тимчасово недоступний.',missing:'Не опубліковано'},
- en:{title:'Compare CATL systems',description:'Compare published specifications for CATL systems.',home:'Home',heading:'Compare CATL systems',intro:'Choose systems and compare their technical parameters for your project.',eyebrow:'TECHNICAL COMPARISON',proof:['Verified technical data','Compare by use case','Sources in product details'],rows:['Category','Nominal energy','Usable energy','Power / C-rate','Round-trip efficiency','Chemistry','Cooling','Dimensions','Weight','Protection','Certifications'],ask:'Discuss project →',empty:'Add products to compare',emptyText:'Choose published catalog entries. Comparisons require published technical datasheets.',catalog:'View catalog →',unavailable:'Catalog is temporarily unavailable.',missing:'Not published'},
- 'zh-CN':{title:'CATL 系统比较',description:'比较 CATL 系统已发布的技术参数。',home:'首页',heading:'CATL 系统比较',intro:'选择系统并比较适合您项目的技术参数。',eyebrow:'技术比较',proof:['已核实的技术数据','按应用场景比较','产品详情中的来源'],rows:['类别','标称能量','可用能量','功率 / C-rate','往返效率','化学体系','冷却方式','尺寸','重量','防护等级','认证'],ask:'咨询项目 →',empty:'添加产品进行比较',emptyText:'请选择目录中已发布的产品。比较功能需要已发布的技术资料。',catalog:'查看目录 →',unavailable:'目录暂时无法使用。',missing:'尚未发布'}
+export const dynamic = 'force-dynamic';
+
+const titles = {
+  'uk-UA': {
+    title: 'Порівняння стаціонарних систем CATL BESS | Офіційна платформа',
+    description: 'Порівняльна інженерна матриця систем накопичення енергії CATL: TENER, EnerOne, EnerC, PR-15 та UniC. Зіставлення ємності, потужності, C-rate та LCOS.',
+    heading: 'Порівняння систем CATL ESS',
+    intro: 'Оберіть від 2 до 4 моделей для детального порівняння параметрів, вартості, терміну служби та типу охолодження.',
+    back: 'До каталогу',
+    home: 'Головна',
+  },
+  en: {
+    title: 'CATL BESS Systems Comparison | Official Ukraine Platform',
+    description: 'Engineering comparison matrix for CATL energy storage: TENER, EnerOne, EnerC, PR-15, and UniC. Compare capacity, power, C-rate, and LCOS.',
+    heading: 'CATL ESS Systems Comparison',
+    intro: 'Select 2 to 4 systems to compare technical parameters, pricing, cycle lifetime, and thermal cooling.',
+    back: 'Back to Catalog',
+    home: 'Home',
+  },
+  'zh-CN': {
+    title: 'CATL 储能系统技术参数对比 | 乌克兰官方平台',
+    description: 'CATL 储能系统对比矩阵：天恒 TENER、EnerOne、EnerC、PR-15 与 UniC 规格参数深度对比。',
+    heading: 'CATL 储能系统对比矩阵',
+    intro: '选择 2 至 4 款型号对比容量、功率、倍率、价格与温控方式。',
+    back: '返回产品目录',
+    home: '首页',
+  },
 } as const;
-export async function generateMetadata({params}:{params:Promise<{locale:string}>}):Promise<Metadata>{const {locale}=await params;const t=copy[locale as keyof typeof copy]??copy['uk-UA'];return {title:t.title,description:t.description,robots:{index:false,follow:true}};}
-export default async function ComparePage({params,searchParams}:{params:Promise<{locale:string}>;searchParams:Promise<{products?:string}>}){const [{locale},{products:query=''}]=await Promise.all([params,searchParams]);if(!(locale in copy))notFound();const t=copy[locale as keyof typeof copy];const ids=[...new Set(query.split(',').map(s=>s.trim()).filter(Boolean))].slice(0,4);let products:KatlProduct[]=[];let unavailable=false;if(ids.length)try{products=(await Promise.all(ids.map(id=>pimRepository.getProductBySlug(id,locale)))).filter((p):p is KatlProduct=>!!p);}catch{unavailable=true;}const keys:[string,(p:KatlProduct)=>string][]=[[t.rows[0],p=>p.category],[t.rows[1],p=>p.energySpecs.nominalCapacity],[t.rows[2],p=>p.energySpecs.usableCapacity],[t.rows[3],p=>p.energySpecs.cRate],[t.rows[4],p=>p.energySpecs.efficiencyRoundTrip],[t.rows[5],p=>p.cellSpecs.chemistry],[t.rows[6],p=>p.thermalSpecs.coolingMethod],[t.rows[7],p=>p.mechanicalSpecs.dimensions],[t.rows[8],p=>p.mechanicalSpecs.weight],[t.rows[9],p=>p.mechanicalSpecs.protectionRating],[t.rows[10],p=>p.safetySpecs.certifications.join(', ')]];
-return <main className="compare-page"><section className="page-hero compare-hero"><div className="container"><div className="breadcrumbs"><Link href={`/${locale}`}>{t.home}</Link>　/　{t.heading}</div><div className="eyebrow">{t.eyebrow}</div><h1>{t.heading}</h1><p>{t.intro}</p><div className="compare-proof">{t.proof.map(v=><span key={v}>{v}</span>)}</div></div></section><section className="content-section compare-content"><div className="container">{unavailable?<div className="error-note">{t.unavailable}</div>:products.length?<div className="compare-table-wrap"><table className="spec-table"><thead><tr><th>{t.rows[0]}</th>{products.map(p=><th key={p.id}>{p.name}<div><Link className="text-link" href={`/${locale}/rfq?product=${encodeURIComponent(p.id)}`}>{t.ask}</Link></div></th>)}</tr></thead><tbody>{keys.map(([label,get])=><tr key={label}><th>{label}</th>{products.map(p=><td key={p.id}>{get(p)||t.missing}</td>)}</tr>)}</tbody></table></div>:<div className="empty-state"><div><h3>{t.empty}</h3><p>{t.emptyText}</p><Link className="text-link" href={`/${locale}/products`}>{t.catalog}</Link></div></div>}</div></section></main>}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = titles[locale as keyof typeof titles] || titles['uk-UA'];
+  return {
+    title: t.title,
+    description: t.description,
+  };
+}
+
+export default async function ComparePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<{ products?: string }>;
+}) {
+  const [{ locale }, { products: productQuery }] = await Promise.all([params, searchParams]);
+  if (!['uk-UA', 'en', 'zh-CN'].includes(locale)) notFound();
+
+  const t = titles[locale as keyof typeof titles] || titles['uk-UA'];
+
+  let allProducts: any[] = [];
+  try {
+    allProducts = await pimRepository.getAllProducts(locale);
+  } catch {
+    allProducts = [];
+  }
+
+  const initialIds = productQuery
+    ? productQuery.split(',').map((s) => decodeURIComponent(s.trim()))
+    : ['catl-tener-6250', 'catl-enerone-plus', 'catl-enerc-plus'];
+
+  return (
+    <main className="compare-page">
+      <section className="page-hero compare-hero">
+        <div className="container">
+          <div className="breadcrumbs">
+            <Link href={`/${locale}`}>{t.home}</Link> / <Link href={`/${locale}/products`}>{t.back}</Link> / {t.heading}
+          </div>
+          <div className="eyebrow">CATL BENCHMARK & COMPARISON</div>
+          <AnimatedSection direction="up" delay={0.05}>
+            <h1>{t.heading}</h1>
+            <p>{t.intro}</p>
+          </AnimatedSection>
+        </div>
+      </section>
+
+      <AnimatedSection className="content-section compare-content" delay={0.2}>
+        <div className="container">
+          <BessComparator
+            products={allProducts}
+            locale={locale}
+            initialSelectedIds={initialIds}
+          />
+        </div>
+      </AnimatedSection>
+    </main>
+  );
+}

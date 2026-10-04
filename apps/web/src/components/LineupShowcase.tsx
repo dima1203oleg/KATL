@@ -60,15 +60,27 @@ export function LineupShowcase({
           {visibleProducts.map((product) => (
             <article key={product.id} className="energy-model-card">
               <Link className="energy-model-image" href={`/${locale}/products/${encodeURIComponent(product.id)}`} aria-label={`${t.details}: ${product.name}`}>
-                <img src="/design/tener-container.webp" alt="" width="180" height="110" loading="lazy" />
+                <img
+                  src={`/design/products/${product.id}.webp`}
+                  alt={product.name}
+                  width="180"
+                  height="110"
+                  loading="lazy"
+                />
               </Link>
-              <span className="energy-model-tag">{product.type || product.category}</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '8px 0 4px' }}>
+                <span className="energy-model-tag">{product.category}</span>
+                <span className="provenance-tag"><ShieldCheck size={11}/> {locale === 'en' ? 'Verified CATL' : locale === 'zh-CN' ? '官方核实' : 'Перевірено'}</span>
+              </div>
               <h3>{product.name}</h3>
               <p>{product.shortDesc}</p>
               <div className="product-data">
                 {product.energySpecs.nominalCapacity && <span className="data-chip">{product.energySpecs.nominalCapacity}</span>}
                 {product.energySpecs.nominalVoltage && <span className="data-chip">{product.energySpecs.nominalVoltage}</span>}
                 {product.thermalSpecs.coolingMethod && <span className="data-chip">{product.thermalSpecs.coolingMethod}</span>}
+              </div>
+              <div className="card-price-badge">
+                {((product.energySpecs as any)?.priceDisplayUah) || (locale === 'en' ? 'Price on request' : locale === 'zh-CN' ? '价格电议' : 'Ціна за запитом')}
               </div>
               <div className="product-actions">
                 <Link className="text-link" href={`/${locale}/products/${encodeURIComponent(product.id)}`}>{t.details}<ArrowRight size={14}/></Link>
