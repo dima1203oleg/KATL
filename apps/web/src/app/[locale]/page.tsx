@@ -10,6 +10,13 @@ import { asLocale, BRAND, languageAlternates, pick, type Locale } from '../../li
 import { LineupShowcase } from '../../components/LineupShowcase';
 import { EnergyFlowHero } from '../../components/home/EnergyFlowHero';
 import { PeakShavingLab } from '../../components/home/PeakShavingLab';
+import { TechMatrix } from '../../components/home/TechMatrix';
+
+const TM_HEAD = {
+  'uk-UA': { kicker: 'CATL · TECH MATRIX', title: 'Технології CATL — у цифрах, які можна перевірити', body: 'Заяви виробника — з посиланням на першоджерело. Поруч — як накопичувач працює в трьох режимах на моделі заводу. Ми не змішуємо ці два типи даних.' },
+  en: { kicker: 'CATL · TECH MATRIX', title: 'CATL technology — in numbers you can verify', body: 'Manufacturer claims, each linked to its primary source. Alongside: how storage runs in three modes on a factory model. We never mix the two kinds of data.' },
+  'zh-CN': { kicker: 'CATL · TECH MATRIX', title: 'CATL 技术——可核验的数字', body: '制造商声明均附原始出处；旁边展示储能在工厂模型中的三种运行模式。两类数据从不混用。' },
+} as const;
 import { JsonLd, faqLd } from '../../components/seo/JsonLd';
 
 /* ------------------------------------------------------------------------------------------------
@@ -349,6 +356,18 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               );
             })}
           </div>
+        </div>
+      </section>
+
+      {/* TECH MATRIX — verified manufacturer claims + live operating modes */}
+      <section className="kx-section kx-section-ink kx-tm-section" aria-labelledby="kx-tm">
+        <div className="kx-wrap">
+          <header className="kx-head">
+            <span className="kx-kicker">{TM_HEAD[asLocale(locale)].kicker}</span>
+            <h2 id="kx-tm">{TM_HEAD[asLocale(locale)].title}</h2>
+            <p>{TM_HEAD[asLocale(locale)].body}</p>
+          </header>
+          <TechMatrix locale={locale} />
         </div>
       </section>
 

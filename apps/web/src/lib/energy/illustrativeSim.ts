@@ -26,6 +26,7 @@ const STEP = 0.25; // h
 const BESS_KW = 600;
 const BESS_KWH = 1600;
 const EFF = 0.92; // one-way charge efficiency used for the illustration
+const RESERVE = 0.1; // BMS keeps 10% in reserve — the battery is never shown drained to zero
 
 /** Synthetic two-shift manufacturing profile, kW. */
 export function factoryLoad(t: number) {
@@ -69,7 +70,7 @@ export function simulateDay(mode: FlowMode): FlowFrame[] {
     const surplus = solar - solarToLoad;
     const residual = load - solarToLoad;
     const room = (1 - soc) * BESS_KWH;
-    const avail = soc * BESS_KWH;
+    const avail = Math.max(0, soc - RESERVE) * BESS_KWH;
     let discharge = 0;
     let charge = 0;
 

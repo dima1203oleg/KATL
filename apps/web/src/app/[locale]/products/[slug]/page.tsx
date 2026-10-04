@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { pimRepository } from '../../../../lib/pim/pimRepository';
-import { TenerProductDetailView } from '../../../../components/TenerProductDetailView';
+import { ProductDetail } from '../../../../components/product/ProductDetail';
 import { JsonLd, breadcrumbLd } from '../../../../components/seo/JsonLd';
 import { BRAND } from '../../../../lib/brand';
 
@@ -39,5 +39,5 @@ export default async function ProductDetailPage({params}:Props){
  const productLd={'@context':'https://schema.org','@type':'Product','name':product.name,'description':product.shortDesc,'category':product.category,
   'brand':{'@type':'Brand','name':'CATL'},'manufacturer':{'@type':'Organization','name':'CATL'},
   'image':`${BRAND.siteUrl}/design/products/${encodeURIComponent(product.id)}.webp`,'url':`${BRAND.siteUrl}/${locale}/products/${encodeURIComponent(product.id)}`};
- return <><JsonLd data={productLd}/><JsonLd data={breadcrumbLd([[home,`/${locale}`],[catalog,`/${locale}/products`],[product.name,`/${locale}/products/${encodeURIComponent(product.id)}`]])}/><TenerProductDetailView product={product} locale={locale} documents={documents}/></>;
+ return <><JsonLd data={productLd}/><JsonLd data={breadcrumbLd([[home,`/${locale}`],[catalog,`/${locale}/products`],[product.name,`/${locale}/products/${encodeURIComponent(product.id)}`]])}/><ProductDetail product={product} locale={locale} documents={documents}/></>;
 }
