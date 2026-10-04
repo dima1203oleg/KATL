@@ -16,3 +16,6 @@ uploads/private/
 test-results/
 playwright-report/
 fixtures/runtime/
+
+.local-logs/
+start-katl-local.command
