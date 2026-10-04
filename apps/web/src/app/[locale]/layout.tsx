@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import React from 'react';
 import '../globals.css';
 import '../kx.css';
+import '../kx-home.css';
 import { PublicShell } from '../../components/SiteShell';
 import { JsonLd, siteGraph } from '../../components/seo/JsonLd';
 import { asLocale, BRAND, LOCALES, pick } from '../../lib/brand';

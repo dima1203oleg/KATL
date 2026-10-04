@@ -127,7 +127,7 @@ export function AdminWorkspace() {
 
   if (checking) return <main className="admin-gate"><div className="admin-card" role="status">Перевіряємо захищену сесію…</div></main>;
   if (!user) return <main className="admin-gate"><form className="admin-login admin-card" onSubmit={login}>
-    <div className="admin-brand"><span className="brand-wordmark">KATL</span><span>SECURE CONTROL CENTER</span></div>
+    <div className="admin-brand"><span className="brand-wordmark">CATL ESS</span><span>SECURE CONTROL CENTER</span></div>
     <ShieldCheck size={30} aria-hidden="true"/><h1>Вхід до адмінпанелі</h1><p>Доступ надається лише користувачам із призначеною адміністративною роллю.</p>
     {error && <div className="admin-alert" role="alert"><CircleAlert size={16}/>{error}</div>}
     <label>Email<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
@@ -142,12 +142,12 @@ export function AdminWorkspace() {
     { id: 'sync', label: 'CATL Sync', allowed: canSync }, { id: 'audit', label: 'Журнал аудиту', allowed: privileged },
   ];
   return <main className="admin-app"><aside className="admin-sidebar">
-    <a href="/uk-UA" className="admin-brand"><span className="brand-wordmark">KATL</span><span>CONTROL CENTER</span></a>
+    <a href="/uk-UA" className="admin-brand"><span className="brand-wordmark">CATL ESS</span><span>CONTROL CENTER</span></a>
     <div className="admin-user"><span className="admin-avatar">{user.name.slice(0, 1).toUpperCase()}</span><span><strong>{user.name}</strong><small>{user.role}</small></span></div>
     <nav aria-label="Адміністративна навігація">{tabs.filter((item) => item.allowed).map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => { setNotice(''); setError(''); setTab(item.id); }}>{item.id === 'overview' ? <Activity size={17}/> : item.id === 'pim' ? <ShieldCheck size={17}/> : item.id === 'rfq' ? <ArrowRight size={17}/> : item.id === 'sync' ? <RefreshCw size={17}/> : <FileClock size={17}/>}<span>{item.label}</span></button>)}</nav>
     <button className="admin-logout" onClick={logout} disabled={busy}><LogOut size={16}/>Вийти</button>
   </aside><section className="admin-main">
-    <header className="admin-topbar"><div><span className="eyebrow">KATL · ЗАХИЩЕНА ЗОНА</span><h1>{tabs.find((item) => item.id === tab)?.label}</h1></div><button className="button button-secondary" onClick={() => void loadTab(tab)} disabled={busy}><RefreshCw size={15}/>Оновити</button></header>
+    <header className="admin-topbar"><div><span className="eyebrow">CATL ESS · ЗАХИЩЕНА ЗОНА</span><h1>{tabs.find((item) => item.id === tab)?.label}</h1></div><button className="button button-secondary" onClick={() => void loadTab(tab)} disabled={busy}><RefreshCw size={15}/>Оновити</button></header>
     {error && <div className="admin-alert" role="alert"><CircleAlert size={16}/>{error}</div>}{notice && <div className="admin-notice" role="status"><Check size={16}/>{notice}</div>}
     {busy && <div className="admin-progress" role="status">Оновлюємо дані…</div>}
     {tab === 'pim' && <PimManager userRole={user.role}/>}

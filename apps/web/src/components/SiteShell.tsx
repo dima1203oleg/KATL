@@ -4,19 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { BatteryCharging, BookOpen, BriefcaseBusiness, ChevronDown, Globe2, Menu, Search, X, Zap } from 'lucide-react';
-import { BRAND } from '../lib/brand';
+import { BRAND, pick } from '../lib/brand';
 
-/** KATL mark: a cell with three rising charge bars. */
-function BrandMark() {
-  return (
-    <svg className="kx-brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="1" y="1" width="30" height="30" rx="8" fill="#0a0e14" />
-      <rect x="8" y="17" width="4" height="8" rx="1.5" fill="#23d3a6" />
-      <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#23d3a6" />
-      <rect x="20" y="7" width="4" height="18" rx="1.5" fill="#2b63ff" />
-    </svg>
-  );
-}
 
 const translations: Record<string, Record<string, string>> = {
   'uk-UA': {
@@ -103,10 +92,9 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="container header-inner">
-        <Link href={root} className="brand kx-brand" aria-label={locale === 'en' ? 'KATL — home' : locale === 'zh-CN' ? 'KATL — 首页' : 'KATL — на головну'}>
-          <BrandMark />
-          <span className="kx-brand-word">KATL</span>
-          <span className="kx-brand-cap">ENERGY STORAGE<br/>PLATFORM</span>
+        <Link href={root} className="brand kx-brand" aria-label={`${BRAND.name} — ${locale === 'en' ? 'home' : locale === 'zh-CN' ? '首页' : 'на головну'}`}>
+          <span className="kx-brand-word">{BRAND.wordmark}<i aria-hidden="true" /></span>
+          <span className="kx-brand-cap">{pick(BRAND.wordmarkCaption, locale)}</span>
         </Link>
         <nav className="primary-nav" aria-label="Головна навігація">
           {/* Products Nav Item with Mega Menu */}
@@ -288,13 +276,13 @@ export function SiteFooter() {
   return <footer className="site-footer">
     <div className="container">
       <div className="footer-grid">
-        <div className="footer-brand"><Link href={`/${locale}`} className="brand kx-brand"><BrandMark /><span className="kx-brand-word">KATL</span><span className="kx-brand-cap">ENERGY STORAGE<br/>PLATFORM</span></Link><p>{en?'Engineering, financial modelling, logistics and service for battery energy storage projects in Ukraine — on CATL technology.':zh?'基于 CATL 技术，为乌克兰储能项目提供工程、财务模型、物流与服务。':'Інженерія, фінансове моделювання, логістика та сервіс для проєктів накопичення енергії в Україні — на технологіях CATL.'}</p></div>
+        <div className="footer-brand"><Link href={`/${locale}`} className="brand kx-brand"><span className="kx-brand-word">{BRAND.wordmark}<i aria-hidden="true" /></span><span className="kx-brand-cap">{pick(BRAND.wordmarkCaption, locale)}</span></Link><p>{en?'Engineering, financial modelling, logistics and service for battery energy storage projects in Ukraine — on CATL technology.':zh?'基于 CATL 技术，为乌克兰储能项目提供工程、财务模型、物流与服务。':'Інженерія, фінансове моделювання, логістика та сервіс для проєктів накопичення енергії в Україні — на технологіях CATL.'}</p></div>
         <FooterColumn title={en?'Products':zh?'产品':'Продукція'} links={[[en?'Catalog':zh?'产品目录':'Каталог систем', `/${locale}/products`],[en?'Compare':zh?'对比':'Порівняння', `/${locale}/compare`],[en?'Documents':zh?'文档':'Документи', `/${locale}/documents`]]} />
         <FooterColumn title={en?'Solutions':zh?'解决方案':'Рішення'} links={[[en?'All solutions':zh?'全部解决方案':'Усі рішення', `/${locale}/solutions`],[en?'Industries':zh?'行业':'Для галузей', `/${locale}/industries`],[en?'BESS in Ukraine':zh?'乌克兰储能':'BESS в Україні', `/${locale}/energy-storage-ukraine`]]} />
         <FooterColumn title={en?'Engineering':zh?'工程':'Інженерія'} links={[["BESS Designer", `/${locale}/bess-designer`],[en?'Calculators':zh?'计算器':'Калькулятори', `/${locale}/engineering`],[en?'Knowledge':zh?'知识库':'База знань', `/${locale}/resources`]]} />
         <FooterColumn title={en?'Company':zh?'公司':'Компанія'} links={[[en?'About this site':zh?'关于本站':'Про сайт', `/${locale}/about`],[en?'Partners':zh?'合作伙伴':'Партнерам', `/${locale}/partner`],[en?'Contact':zh?'联系':'Контакти', `/${locale}/contact`],[en?'Request a proposal':zh?'提交需求':'Запит пропозиції', `/${locale}/rfq`]]} />
       </div>
-      <div className="footer-bottom"><span>© {new Date().getFullYear()} KATL · {en?'Energy Storage Platform':zh?'储能项目平台':'платформа систем накопичення енергії'}</span><span>{BRAND.disclosure[en?'en':zh?'zh-CN':'uk-UA']}</span><span><Link href={`/${locale}/privacy`}>{en?'Privacy':zh?'隐私':'Приватність'}</Link> · <Link href={`/${locale}/terms`}>{en?'Terms':zh?'条款':'Умови'}</Link></span></div>
+      <div className="footer-bottom"><span>© {new Date().getFullYear()} {BRAND.name}</span><span>{BRAND.disclosure[en?'en':zh?'zh-CN':'uk-UA']}</span><span><Link href={`/${locale}/privacy`}>{en?'Privacy':zh?'隐私':'Приватність'}</Link> · <Link href={`/${locale}/terms`}>{en?'Terms':zh?'条款':'Умови'}</Link></span></div>
     </div>
   </footer>;
 }

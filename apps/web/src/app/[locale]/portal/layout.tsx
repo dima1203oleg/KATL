@@ -3,9 +3,9 @@ import type { ReactNode } from 'react';
 import { asLocale, languageAlternates } from '../../../lib/brand';
 
 const M = {
-  'uk-UA': { title: 'Кабінет клієнта', description: 'Особистий кабінет клієнта платформи KATL.' },
-  en: { title: 'Customer account', description: 'KATL customer account.' },
-  'zh-CN': { title: '客户账户', description: 'KATL 客户账户。' },
+  'uk-UA': { title: 'Кабінет клієнта', description: 'Особистий кабінет клієнта CATL ESS Україна.' },
+  en: { title: 'Customer account', description: 'CATL ESS Ukraine customer account.' },
+  'zh-CN': { title: '客户账户', description: 'CATL ESS 乌克兰客户账户。' },
 } as const;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {

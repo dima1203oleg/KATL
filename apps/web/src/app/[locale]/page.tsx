@@ -11,6 +11,53 @@ import { LineupShowcase } from '../../components/LineupShowcase';
 import { EnergyFlowHero } from '../../components/home/EnergyFlowHero';
 import { PeakShavingLab } from '../../components/home/PeakShavingLab';
 import { TechMatrix } from '../../components/home/TechMatrix';
+import { CellToGrid } from '../../components/home/CellToGrid';
+import { BlackoutCalc, type BackupSystem } from '../../components/home/BlackoutCalc';
+import { Reveal } from '../../components/home/Reveal';
+import { energyKwh, powerKw } from '../../components/product/productSpec';
+
+const TENER_SRC = 'https://www.aap.com.au/aapreleases/cision20240412ae86428';
+const STACK_SRC = 'https://www.aap.com.au/aapreleases/cision20250507ae82459';
+
+/** Copy for the 2026-10 homepage additions (proof strip, blackout calculator, cell-to-grid story). */
+const H2 = {
+  'uk-UA': {
+    proof: [['6,25', 'МВт·год', 'в одному 20-футовому контейнері TENER', TENER_SRC], ['0%', 'деградації', 'ємності й потужності за перші 5 років', TENER_SRC], ['9', 'МВт·год', 'у системі TENER Stack', STACK_SRC]] as Array<[string, string, string, string]>,
+    proofSrc: 'джерело',
+    boKicker: '01 · ПЕРШЕ ПИТАННЯ', boTitle: 'Скільки годин ваш об’єкт працюватиме без мережі?',
+    boBody: 'Вкажіть критичне навантаження — те, що має працювати під час відключення, — і оберіть систему CATL з каталогу. Розрахунок миттєвий, а результат можна одразу відправити інженеру.',
+    cgKicker: 'ВІД КОМІРКИ ДО ЕЛЕКТРОСТАНЦІЇ', cgTitle: 'Як влаштована система накопичення CATL', cgBody: 'Чотири рівні — від однієї комірки до станції на сотні мегават-годин. Прокрутіть, щоб зібрати систему.',
+  },
+  en: {
+    proof: [['6.25', 'MWh', 'in one 20-ft TENER container', TENER_SRC], ['0%', 'degradation', 'of capacity and power in the first 5 years', TENER_SRC], ['9', 'MWh', 'in a TENER Stack system', STACK_SRC]] as Array<[string, string, string, string]>,
+    proofSrc: 'source',
+    boKicker: '01 · THE FIRST QUESTION', boTitle: 'How many hours can your site run without the grid?',
+    boBody: 'Enter the critical load — what must keep running during an outage — and pick a CATL system from the catalogue. The result is instant and can go straight to an engineer.',
+    cgKicker: 'FROM CELL TO POWER PLANT', cgTitle: 'How a CATL storage system is built', cgBody: 'Four levels — from a single cell to a plant of hundreds of megawatt-hours. Scroll to assemble the system.',
+  },
+  'zh-CN': {
+    proof: [['6.25', 'MWh', '单台 20 尺 TENER 集装箱', TENER_SRC], ['0%', '衰减', '前 5 年容量与功率', TENER_SRC], ['9', 'MWh', 'TENER Stack 系统', STACK_SRC]] as Array<[string, string, string, string]>,
+    proofSrc: '来源',
+    boKicker: '01 · 第一个问题', boTitle: '断电时，您的项目能运行几个小时？',
+    boBody: '输入重要负荷（停电期间必须运行的设备），并从目录中选择 CATL 系统。即时计算，结果可直接发送给工程师。',
+    cgKicker: '从电芯到电站', cgTitle: 'CATL 储能系统的构成', cgBody: '四个层级——从单个电芯到数百兆瓦时的电站。向下滚动，逐步组装系统。',
+  },
+} as const;
+
+/** Systems with both usable energy and power in the catalogue — inputs for the blackout calculator. */
+function backupSystems(products: KatlProduct[]): BackupSystem[] {
+  const out: BackupSystem[] = [];
+  const seen = new Set<string>();
+  for (const p of products) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    const e = p.energySpecs as unknown as Record<string, string> | undefined;
+    const usable = energyKwh(e?.usableCapacity) ?? energyKwh(e?.nominalCapacity);
+    const kw = powerKw(e?.maxContinuousPowerKw);
+    if (usable && kw) out.push({ id: p.id, name: p.name, usableKwh: usable, powerKw: kw });
+  }
+  return out.sort((a, b) => a.usableKwh - b.usableKwh);
+}
 
 const TM_HEAD = {
   'uk-UA': { kicker: 'CATL · TECH MATRIX', title: 'Технології CATL — у цифрах, які можна перевірити', body: 'Заяви виробника — з посиланням на першоджерело. Поруч — як накопичувач працює в трьох режимах на моделі заводу. Ми не змішуємо ці два типи даних.' },
@@ -27,10 +74,10 @@ const C = {
   'uk-UA': {
     metaTitle: 'Системи накопичення енергії (BESS) для бізнесу та енергетики України',
     metaDesc: 'Інженерний підбір BESS/ESS на технологіях CATL: аналіз профілю навантаження, сайзинг, фінансова модель LCOS, логістика з Китаю, митне оформлення, монтаж та O&M в Україні.',
-    kicker: 'ENERGY STORAGE PLATFORM · УКРАЇНА',
-    h1a: 'Системи накопичення енергії,',
-    h1b: 'спроєктовані під ваш об’єкт',
-    lead: 'Від профілю навантаження до введення в експлуатацію: інженерний підбір BESS на технологіях CATL, прозора фінансова модель, логістика з Китаю та митне оформлення — в одному керованому процесі.',
+    kicker: 'CATL ESS · УКРАЇНА',
+    h1a: 'Системи накопичення енергії CATL —',
+    h1b: 'від розрахунку до сервісу в Україні',
+    lead: 'Підбираємо систему під ваш графік навантаження, рахуємо окупність, привозимо з Китаю, розмитнюємо, монтуємо й обслуговуємо. Один підрядник — від першого розрахунку до роботи на об’єкті.',
     ctaDesign: 'Спроєктувати систему', ctaRfq: 'Запросити ТКП',
     pillars: [
       ['Інженерія', 'Профіль навантаження, сайзинг, SLD, сумісність PCS/EMS'],
@@ -95,7 +142,7 @@ const C = {
       { q: 'Як визначити потрібну потужність і ємність накопичувача?', a: 'Потужність (кВт) визначається тим, скільки навантаження BESS має перекрити в моменті: перевищення над лімітом мережі або критичні споживачі. Ємність (кВт·год) — тим, як довго: тривалістю пікових подій або потрібним часом автономії з урахуванням робочого вікна заряду та ККД. Надійна оцінка потребує інтервальних даних лічильника (15–30 хв) щонайменше за кілька місяців.' },
       { q: 'Скільки служить літій-залізо-фосфатний (LFP) накопичувач?', a: 'Ресурс залежить від кількості циклів на добу, глибини розряду, температурного режиму та C-rate. Виробник вказує ресурс і гарантійні умови в документації на конкретну модель; ми закладаємо деградацію у фінансову модель явно і показуємо, як вона впливає на результат.' },
       { q: 'Що потрібно, щоб отримати техніко-комерційну пропозицію (ТКП)?', a: 'Мінімум: інтервальні дані споживання, тарифи та структура плати за потужність, дозволена потужність приєднання, наявна або запланована генерація, перелік критичних навантажень і бажаний строк реалізації. Однолінійна схема майданчика суттєво пришвидшує оцінку.' },
-      { q: 'Чи є KATL офіційним дистриб’ютором CATL?', a: 'Ні. KATL — незалежна інженерна платформа, що працює з технологіями CATL та обладнанням за специфікаціями виробника. Будь-який партнерський статус буде опубліковано лише після документального підтвердження.' },
+      { q: 'Який у вас статус щодо CATL?', a: 'Ми займаємося дистриб’юцією та інжинірингом систем накопичення енергії CATL в Україні. Статус підтверджено документом CATL — копію надаємо замовникам і партнерам на запит. Технічні характеристики завжди звіряємо з чинним datasheet виробника.' },
       { q: 'Хто відповідає за логістику та митне оформлення?', a: 'Ми супроводжуємо поставку від виробника до майданчика: міжнародну доставку, митне оформлення, складування та доставку на об’єкт. Маршрут, строки, податкові умови та відповідальність сторін фіксуються в ТКП і договорі для конкретного проєкту.' },
     ],
     finalKicker: 'НАСТУПНИЙ КРОК',
@@ -106,10 +153,10 @@ const C = {
   en: {
     metaTitle: 'Battery Energy Storage (BESS) for Business and Utilities in Ukraine',
     metaDesc: 'Engineering-led BESS/ESS selection on CATL technology: load-profile analysis, sizing, LCOS financial model, logistics from China, customs clearance, installation and O&M in Ukraine.',
-    kicker: 'ENERGY STORAGE PLATFORM · UKRAINE',
-    h1a: 'Energy storage systems,',
-    h1b: 'engineered for your site',
-    lead: 'From load profile to commissioning: engineering-led BESS selection on CATL technology, a transparent financial model, logistics from China and customs clearance — in one managed process.',
+    kicker: 'CATL ESS · UKRAINE',
+    h1a: 'CATL energy storage —',
+    h1b: 'from first calculation to service in Ukraine',
+    lead: 'We size the system to your load profile, model the payback, ship it from China, clear customs, install and maintain it. One contractor from the first calculation to a working site.',
     ctaDesign: 'Design a system', ctaRfq: 'Request a proposal',
     pillars: [
       ['Engineering', 'Load profile, sizing, SLD, PCS/EMS compatibility'],
@@ -174,7 +221,7 @@ const C = {
       { q: 'How do I determine the required power and energy?', a: 'Power (kW) is set by how much load the BESS must cover at once: the excess above the grid limit or the critical loads. Energy (kWh) is set by how long: the duration of peak events or the required autonomy, adjusted for the usable state-of-charge window and efficiency. A reliable estimate needs interval meter data (15–30 min) for at least several months.' },
       { q: 'How long does an LFP battery system last?', a: 'Service life depends on cycles per day, depth of discharge, temperature and C-rate. The manufacturer states cycle life and warranty terms in the documentation for each model; we model degradation explicitly in the financials and show its effect on the result.' },
       { q: 'What do you need to prepare a commercial proposal?', a: 'At minimum: interval consumption data, tariffs and demand-charge structure, the permitted grid connection capacity, existing or planned generation, the list of critical loads and the target timeline. A single-line diagram of the site speeds up the assessment considerably.' },
-      { q: 'Is KATL an official CATL distributor?', a: 'No. KATL is an independent engineering platform working with CATL technology and equipment to the manufacturer’s specifications. Any partnership status will be published only once documented.' },
+      { q: 'What is your status with CATL?', a: 'We distribute and engineer CATL energy storage systems in Ukraine. The status is confirmed by a CATL document — a copy is available to customers and partners on request. Specifications are always checked against the current manufacturer datasheet.' },
       { q: 'Who handles logistics and customs?', a: 'We manage delivery from the manufacturer to the site: international freight, customs clearance, warehousing and delivery to site. Route, lead time, tax treatment and the parties’ responsibilities are fixed in the proposal and contract for each project.' },
     ],
     finalKicker: 'NEXT STEP',
@@ -185,10 +232,10 @@ const C = {
   'zh-CN': {
     metaTitle: '乌克兰工商业与电网储能系统 (BESS) 项目平台',
     metaDesc: '基于 CATL 技术的储能工程选型：负荷曲线分析、容量配置、LCOS 财务模型、中国至乌克兰物流、清关、安装与运维。',
-    kicker: '储能项目平台 · 乌克兰',
-    h1a: '储能系统，',
-    h1b: '为您的项目量身设计',
-    lead: '从负荷曲线到投运：基于 CATL 技术的工程选型、透明的财务模型、中国至乌克兰的物流与清关——在一个可控流程中完成。',
+    kicker: 'CATL ESS · 乌克兰',
+    h1a: 'CATL 储能系统——',
+    h1b: '在乌克兰从测算到运维',
+    lead: '按负荷曲线选型、测算回报、从中国运输、清关、安装与运维。从第一次测算到现场运行，由一家承包商负责。',
     ctaDesign: '设计系统', ctaRfq: '获取方案',
     pillars: [
       ['工程', '负荷曲线、容量配置、单线图、PCS/EMS 兼容性'],
@@ -253,7 +300,7 @@ const C = {
       { q: '如何确定储能所需的功率与容量？', a: '功率 (kW) 取决于储能需要同时覆盖多少负荷：超出电网上限的部分或重要负荷。容量 (kWh) 取决于持续多久：峰值事件的时长或所需的自主运行时间，并考虑可用 SOC 区间和效率。可靠的评估需要至少数月的电表间隔数据（15–30 分钟）。' },
       { q: '磷酸铁锂 (LFP) 储能系统的寿命有多长？', a: '寿命取决于每日循环次数、放电深度、温度与倍率。制造商在各型号的文件中给出循环寿命与质保条款；我们在财务模型中明确计入衰减并展示其影响。' },
       { q: '编制技术商务方案需要哪些资料？', a: '至少需要：用电间隔数据、电价及需量电费结构、允许接入容量、现有或规划的发电设施、重要负荷清单以及目标工期。现场单线图可显著加快评估。' },
-      { q: 'KATL 是 CATL 官方经销商吗？', a: '不是。KATL 是独立的工程平台，基于 CATL 技术并按制造商规格开展工作。任何合作状态仅在书面确认后发布。' },
+      { q: '贵方与 CATL 是什么关系？', a: '我们在乌克兰从事 CATL 储能系统的分销与工程服务。该资质由 CATL 文件确认，可应客户及合作伙伴要求提供副本。技术参数始终以制造商现行规格书为准。' },
       { q: '谁负责物流与清关？', a: '我们负责从制造商到项目现场的交付：国际运输、清关、仓储与送达现场。路线、交期、税务处理及各方责任在具体项目的方案与合同中确定。' },
     ],
     finalKicker: '下一步',
@@ -289,6 +336,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const locale: Locale = asLocale((await params).locale);
   const t = C[locale];
+  const h2 = H2[locale];
   const root = `/${locale}`;
 
   let products: KatlProduct[] = [];
@@ -302,20 +350,29 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   return (
     <main className="kx">
       <JsonLd data={faqLd(t.faq.map((f) => ({ q: f.q, a: f.a })))} />
+      <Reveal />
 
       {/* 01 — HERO */}
       <section className="kx-hero" aria-labelledby="kx-hero-title">
         <div className="kx-wrap kx-hero-grid">
           <div className="kx-hero-copy">
             <span className="kx-kicker">{t.kicker}</span>
-            <h1 id="kx-hero-title">
-              {t.h1a} <span className="kx-h1-accent">{t.h1b}</span>
+            <h1 id="kx-hero-title" className="kx-h1-reveal">
+              <span className="kx-h1-line">{t.h1a}</span> <span className="kx-h1-line kx-h1-accent">{t.h1b}</span>
             </h1>
-            <p className="kx-lead">{t.lead}</p>
-            <div className="kx-actions">
-              <Link className="kx-btn kx-btn-primary" href={`${root}/bess-designer`}>{t.ctaDesign}<ArrowRight size={17} /></Link>
+            <p className="kx-lead kx-enter" style={{ animationDelay: '260ms' }}>{t.lead}</p>
+            <div className="kx-actions kx-enter" style={{ animationDelay: '360ms' }}>
+              <Link className="kx-btn kx-btn-primary kx-btn-shine" href={`${root}/bess-designer`}>{t.ctaDesign}<ArrowRight size={17} /></Link>
               <Link className="kx-btn kx-btn-ghost" href={`${root}/rfq`}>{t.ctaRfq}</Link>
             </div>
+            <ul className="kx-proof kx-enter" style={{ animationDelay: '460ms' }}>
+              {h2.proof.map(([num, unit, text, src]) => (
+                <li key={text}>
+                  <strong className="kx-mono">{num}<small>{unit}</small></strong>
+                  <span>{text} <a href={src} target="_blank" rel="noreferrer noopener">{h2.proofSrc}<ArrowUpRight size={11} aria-hidden="true" /></a></span>
+                </li>
+              ))}
+            </ul>
           </div>
           <EnergyFlowHero locale={locale} />
         </div>
@@ -334,10 +391,22 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         </div>
       </section>
 
+      {/* BLACKOUT ENDURANCE — the first question of every Ukrainian business */}
+      <section className="kx-section kx-section-paper kx-bo-section" aria-labelledby="kx-bo">
+        <div className="kx-wrap">
+          <header className="kx-head" data-reveal>
+            <span className="kx-kicker kx-kicker-dark">{h2.boKicker}</span>
+            <h2 id="kx-bo">{h2.boTitle}</h2>
+            <p>{h2.boBody}</p>
+          </header>
+          <div data-reveal><BlackoutCalc locale={locale} systems={backupSystems(products)} /></div>
+        </div>
+      </section>
+
       {/* 02 — ROLES */}
       <section className="kx-section" aria-labelledby="kx-roles">
         <div className="kx-wrap">
-          <header className="kx-head">
+          <header className="kx-head" data-reveal>
             <span className="kx-kicker kx-kicker-dark">{t.rolesKicker}</span>
             <h2 id="kx-roles">{t.rolesTitle}</h2>
             <p>{t.rolesBody}</p>
@@ -362,19 +431,31 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       {/* TECH MATRIX — verified manufacturer claims + live operating modes */}
       <section className="kx-section kx-section-ink kx-tm-section" aria-labelledby="kx-tm">
         <div className="kx-wrap">
-          <header className="kx-head">
+          <header className="kx-head" data-reveal>
             <span className="kx-kicker">{TM_HEAD[asLocale(locale)].kicker}</span>
             <h2 id="kx-tm">{TM_HEAD[asLocale(locale)].title}</h2>
             <p>{TM_HEAD[asLocale(locale)].body}</p>
           </header>
-          <TechMatrix locale={locale} />
+          <div data-reveal><TechMatrix locale={locale} /></div>
+        </div>
+      </section>
+
+      {/* CELL TO GRID — scroll story */}
+      <section className="kx-section kx-cg-section" aria-labelledby="kx-cg">
+        <div className="kx-wrap">
+          <header className="kx-head" data-reveal>
+            <span className="kx-kicker kx-kicker-dark">{h2.cgKicker}</span>
+            <h2 id="kx-cg">{h2.cgTitle}</h2>
+            <p>{h2.cgBody}</p>
+          </header>
+          <CellToGrid locale={locale} />
         </div>
       </section>
 
       {/* 03 — PEAK SHAVING LAB */}
       <section className="kx-section kx-section-paper" aria-labelledby="kx-lab">
         <div className="kx-wrap">
-          <header className="kx-head">
+          <header className="kx-head" data-reveal>
             <span className="kx-kicker kx-kicker-dark">{t.labKicker}</span>
             <h2 id="kx-lab">{t.labTitle}</h2>
             <p>{t.labBody}</p>
@@ -423,7 +504,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       {/* 06 — TOOLS */}
       <section className="kx-section" aria-labelledby="kx-tools">
         <div className="kx-wrap">
-          <header className="kx-head">
+          <header className="kx-head" data-reveal>
             <span className="kx-kicker kx-kicker-dark">{t.toolsKicker}</span>
             <h2 id="kx-tools">{t.toolsTitle}</h2>
             <p>{t.toolsBody}</p>

@@ -76,7 +76,7 @@ export const KatlNavbar: React.FC<KatlNavbarProps> = ({
           className="flex items-center gap-3 cursor-pointer select-none group shrink-0"
         >
           <span className="font-display text-2xl font-black tracking-wider text-white">
-            KATL
+            CATL
           </span>
           <div className="h-6 w-[1px] bg-white/20" />
           <div className="flex flex-col text-[10px] leading-tight font-bold tracking-wider text-neutral-300">
