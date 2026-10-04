@@ -5,21 +5,21 @@ import type { KatlProduct } from '@katl/shared-types';
 const copy = {
   'uk-UA': {
     eyebrow: 'CATL · ESS / BESS', title: 'Системи CATL у каталозі',
-    intro: 'Показуємо лише картки, перевірені й опубліковані в PIM.',
+    intro: 'Картки з каталогу PIM. Характеристики попередні — остаточні дані фіксуються в ТКП за datasheet виробника.',
     catalog: 'Увесь каталог', details: 'Детальніше', compare: 'Порівняти',
     empty: 'Перевірені картки продуктів з’являться тут після погодження в PIM.',
     unavailable: 'Каталог тимчасово недоступний.', imageNote: 'Концептуальна ілюстрація; не фото конкретної моделі.',
   },
   en: {
     eyebrow: 'CATL · ESS / BESS', title: 'CATL systems in the catalog',
-    intro: 'Only products reviewed and published in PIM appear here.',
+    intro: 'Records from the PIM catalog. Specifications are preliminary — final figures are fixed in the proposal against the manufacturer datasheet.',
     catalog: 'Full catalog', details: 'Details', compare: 'Compare',
     empty: 'Reviewed product records will appear here after PIM approval.',
     unavailable: 'The catalog is temporarily unavailable.', imageNote: 'Concept illustration, not a photograph of this model.',
   },
   'zh-CN': {
     eyebrow: 'CATL · ESS / BESS', title: 'CATL 储能产品目录',
-    intro: '此处仅展示经过审核并在 PIM 发布的产品。',
+    intro: '来自 PIM 目录的产品记录。参数为初步数据，最终数据以制造商规格书为准并写入正式方案。',
     catalog: '查看完整目录', details: '详情', compare: '比较',
     empty: '产品经 PIM 审核发布后将在此显示。',
     unavailable: '产品目录暂时无法访问。', imageNote: '概念插图，并非该型号的实物照片。',
@@ -70,7 +70,7 @@ export function LineupShowcase({
               </Link>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '8px 0 4px' }}>
                 <span className="energy-model-tag">{product.category}</span>
-                <span className="provenance-tag"><ShieldCheck size={11}/> {locale === 'en' ? 'Verified CATL' : locale === 'zh-CN' ? '官方核实' : 'Перевірено'}</span>
+                <span className="provenance-tag"><ShieldCheck size={11}/> {locale === 'en' ? 'Preliminary data' : locale === 'zh-CN' ? '初步数据' : 'Попередні дані'}</span>
               </div>
               <h3>{product.name}</h3>
               <p>{product.shortDesc}</p>
@@ -80,7 +80,7 @@ export function LineupShowcase({
                 {product.thermalSpecs.coolingMethod && <span className="data-chip">{product.thermalSpecs.coolingMethod}</span>}
               </div>
               <div className="card-price-badge">
-                {((product.energySpecs as any)?.priceDisplayUah) || (locale === 'en' ? 'Price on request' : locale === 'zh-CN' ? '价格电议' : 'Ціна за запитом')}
+                {locale === 'en' ? 'Price in the proposal' : locale === 'zh-CN' ? '价格见正式方案' : 'Ціна — у ТКП'}
               </div>
               <div className="product-actions">
                 <Link className="text-link" href={`/${locale}/products/${encodeURIComponent(product.id)}`}>{t.details}<ArrowRight size={14}/></Link>

@@ -1,53 +1,60 @@
 import type { MetadataRoute } from 'next';
 import type { KatlProduct } from '@katl/shared-types';
 import { pimRepository } from '../lib/pim/pimRepository';
+import { solutions } from '../data/solutions';
+import { BRAND, LOCALES } from '../lib/brand';
 
-const origin = (process.env.PUBLIC_SITE_URL || 'https://catl.site').replace(/\/$/, '');
-const ukPublicRoutes = [
-  '/', '/bess', '/catl-ukraine', '/energy-storage-ukraine', '/products',
-  '/solutions', '/solutions/solar-bess', '/solutions/backup-power', '/solutions/peak-shaving',
-  '/solutions/energy-arbitrage', '/industries', '/industries/manufacturing',
-  '/industries/agriculture', '/engineering', '/engineering/bess-calculator', '/engineering/lcos',
-  '/engineering/single-line-diagram', '/bess-designer', '/compare', '/documents',
-  '/resources', '/resources/guides/how-to-choose-bess', '/resources/glossary',
-  '/partner', '/rfq',
+const origin = BRAND.siteUrl;
+const industries = ['manufacturing', 'agriculture', 'logistics', 'data-centres', 'retail', 'ev-charging', 'hotels'];
+
+/** Routes implemented and translated in all three locales. */
+const multilingualRoutes = [
+  '/', '/products', '/solutions', ...solutions.map((s) => `/solutions/${s.slug}`),
+  '/industries', ...industries.map((s) => `/industries/${s}`),
+  '/engineering', '/engineering/bess-calculator', '/engineering/lcos', '/engineering/single-line-diagram',
+  '/bess-designer', '/compare', '/documents', '/resources', '/resources/glossary', '/partner', '/rfq',
 ];
+/** Substantive routes that currently exist only in Ukrainian (other locales are noindex). */
+const ukOnlyRoutes = ['/bess', '/catl-ukraine', '/energy-storage-ukraine', '/resources/guides/how-to-choose-bess'];
+
+const url = (locale: string, path: string) => `${origin}/${locale}${path === '/' ? '' : path}`;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // These are substantive, currently implemented public routes. Query/filter states,
-  // unfinished locales, private paths, and unverified future products are excluded.
-  const entries: MetadataRoute.Sitemap = ukPublicRoutes.map((path) => ({
-    url: `${origin}/uk-UA${path === '/' ? '' : path}`,
-    changeFrequency: 'monthly',
-    priority: path === '/' ? 1 : 0.6,
-  }));
-  entries.push(
-    { url: `${origin}/en`, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${origin}/zh-CN`, changeFrequency: 'monthly', priority: 0.4 },
-  );
+  const entries: MetadataRoute.Sitemap = [];
+  for (const path of multilingualRoutes) {
+    const languages = Object.fromEntries(LOCALES.map((l) => [l, url(l, path)]));
+    for (const locale of LOCALES) {
+      entries.push({
+        url: url(locale, path),
+        changeFrequency: path === '/' ? 'weekly' : 'monthly',
+        priority: path === '/' ? (locale === 'uk-UA' ? 1 : 0.8) : locale === 'uk-UA' ? 0.7 : 0.5,
+        alternates: { languages },
+      });
+    }
+  }
+  for (const path of ukOnlyRoutes) {
+    entries.push({ url: url('uk-UA', path), changeFrequency: 'monthly', priority: 0.6 });
+  }
 
-  const productsByLocale: Array<[string, KatlProduct[]]> = await Promise.all(['uk-UA', 'en', 'zh-CN'].map(async (locale) => {
-    try { return [locale, await pimRepository.getAllProducts(locale)]; }
-    catch { return [locale, []]; }
+  const productsByLocale: Array<[string, KatlProduct[]]> = await Promise.all(LOCALES.map(async (locale) => {
+    try { return [locale, await pimRepository.getAllProducts(locale)] as [string, KatlProduct[]]; }
+    catch { return [locale, []] as [string, KatlProduct[]]; }
   }));
   const localeProducts = new Map<string, KatlProduct[]>(productsByLocale);
-  const ukProducts = localeProducts.get('uk-UA') || [];
-  for (const product of ukProducts) {
-    const languages: Record<string, string> = { 'uk-UA': `${origin}/uk-UA/products/${encodeURIComponent(product.id)}` };
+  for (const product of localeProducts.get('uk-UA') || []) {
+    const path = `/products/${encodeURIComponent(product.id)}`;
+    const languages: Record<string, string> = { 'uk-UA': url('uk-UA', path) };
     for (const locale of ['en', 'zh-CN']) {
-      if (localeProducts.get(locale)?.some((translated) => translated.id === product.id)) {
-        languages[locale] = `${origin}/${locale}/products/${encodeURIComponent(product.id)}`;
-      }
+      if (localeProducts.get(locale)?.some((p) => p.id === product.id)) languages[locale] = url(locale, path);
     }
-    entries.push({
-      url: languages['uk-UA'],
-      lastModified: (product as typeof product & { updatedAt?: string }).updatedAt || undefined,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-      alternates: { languages },
-    });
-    for (const locale of ['en', 'zh-CN']) {
-      if (languages[locale]) entries.push({ url: languages[locale], changeFrequency: 'monthly', priority: 0.7, alternates: { languages } });
+    for (const [, href] of Object.entries(languages)) {
+      entries.push({
+        url: href,
+        lastModified: (product as typeof product & { updatedAt?: string }).updatedAt || undefined,
+        changeFrequency: 'monthly',
+        priority: 0.6,
+        alternates: { languages },
+      });
     }
   }
   return entries;

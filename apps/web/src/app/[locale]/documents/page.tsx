@@ -10,11 +10,11 @@ export const dynamic = 'force-dynamic';
 const ui = {
   'uk-UA': {
     title: 'Технічна документація CATL ESS | Сертифікати, паспорти, інструкції',
-    description: 'Офіційні паспорти обладнання (Datasheets), інструкції користувача, сертифікати TÜV Rheinland / UL 9540A для систем накопичення CATL.',
+    description: 'Паспорти обладнання (Datasheets), інструкції користувача та документи відповідності для систем накопичення CATL.',
     home: 'Головна',
     docs: 'Документація',
     heading: 'Технічна документація та сертифікати',
-    intro: 'Офіційна інженерна бібліотека: технічні специфікації (Datasheets), схеми підключення, керівництва з експлуатації та сертифікати міжнародних лабораторій.',
+    intro: 'Інженерна бібліотека: технічні специфікації (Datasheets), схеми підключення, керівництва з експлуатації та сертифікати міжнародних лабораторій.',
     searchPlaceholder: 'Пошук за назвою, моделлю (TENER, EnerOne) або типом документа...',
     searchBtn: 'Знайти',
     allTab: 'Всі документи',
@@ -27,7 +27,7 @@ const ui = {
   },
   en: {
     title: 'CATL ESS Technical Documentation | Datasheets, Manuals & Certificates',
-    description: 'Official manufacturer datasheets, user manuals, installation guides, and TÜV / UL 9540A compliance certificates for CATL storage systems.',
+    description: 'Manufacturer datasheets, user manuals, installation guides and compliance documents for CATL storage systems.',
     home: 'Home',
     docs: 'Documentation',
     heading: 'Technical Documentation & Certificates',
@@ -44,7 +44,7 @@ const ui = {
   },
   'zh-CN': {
     title: 'CATL 储能技术资料中心 | 规格书、操作手册与国际认证',
-    description: 'CATL 储能系统官方技术规格书 (Datasheets)、用户手册、安装指南及 TÜV / UL 9540A 认证证书。',
+    description: 'CATL 储能系统技术规格书 (Datasheets)、用户手册、安装指南及合规文件。',
     home: '首页',
     docs: '技术文档',
     heading: '技术文档与认证中心',

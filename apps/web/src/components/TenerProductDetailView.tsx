@@ -31,17 +31,17 @@ const copy = {
     quote: 'Отримати комерційну пропозицію', 
     compare: 'Порівняти характеристики', 
     calculate: 'Розрахувати систему',
-    verified: 'Перевірено CATL PIM', 
-    source: 'Офіційне джерело', 
-    checked: 'Дата верифікації', 
+    verified: 'Попередні дані PIM', 
+    source: 'Джерело', 
+    checked: 'Оновлено', 
     specs: 'Технічні характеристики', 
-    specIntro: 'Усі параметри верифіковані головним інженером платформи на основі офіційної технічної документації виробника.', 
+    specIntro: 'Попередні параметри для інженерного підбору. Остаточні значення фіксуються в ТКП за чинним datasheet виробника.', 
     noSpecs: 'Опублікованих технічних даних поки немає.', 
     concept: 'Концептуальна візуалізація обладнання CATL ESS.', 
     architecture: 'Інтеграція в енергосистему BESS', 
     architectureBody: 'Схема підключення через трансформатор 0.69/10(35) кВ із захистами РЗА, вакуумними вимикачами та комерційним обліком АСКОЕ згідно з ДСТУ EN 62619 та вимогами НЕК «Укренерго».', 
     stages: ['Мережа / ВДЕ', 'PCS 1500V', 'Батарейний BESS', 'Smart EMS / SCADA', 'Критичні споживачі'], 
-    docs: 'Офіційна технічна документація', 
+    docs: 'Технічна документація', 
     docsBody: 'Технічні паспорти (Datasheets), інструкції з монтажу та європейські сертифікати відповідності.', 
     viewPdf: 'Переглянути PDF',
     downloadPdf: 'Завантажити PDF',
@@ -58,23 +58,23 @@ const copy = {
     quote: 'Get Commercial Proposal', 
     compare: 'Compare Specifications', 
     calculate: 'Calculate System',
-    verified: 'Verified CATL PIM', 
-    source: 'Official Source', 
+    verified: 'Preliminary PIM data', 
+    source: 'Source', 
     checked: 'Verification Date', 
     specs: 'Technical Specifications', 
-    specIntro: 'All technical parameters verified by the platform chief engineer based on manufacturer official documentation.', 
+    specIntro: 'Preliminary parameters for engineering selection. Final values are fixed in the proposal against the current manufacturer datasheet.', 
     noSpecs: 'No specifications published yet.', 
     concept: 'Conceptual visualization of CATL ESS equipment.', 
     architecture: 'Grid Integration Architecture', 
     architectureBody: 'Integration via step-up transformer 0.69/10(35) kV with relay protection, vacuum breakers, and commercial metering according to grid operator standards.', 
     stages: ['Grid / Renewables', '1500V PCS', 'CATL Battery BESS', 'Smart EMS / SCADA', 'Critical Loads'], 
-    docs: 'Official Technical Documentation', 
+    docs: 'Technical Documentation', 
     docsBody: 'Manufacturer datasheets, installation guides, and European safety compliance certificates.', 
     viewPdf: 'View PDF',
     downloadPdf: 'Download PDF',
     noDocs: 'Documents for this model are available upon engineering inquiry.',
     provenanceTitle: 'Data Provenance & Verification',
-    provenanceIntro: 'We do not publish unverified specifications. Every key figure is grounded in official CATL documentation.',
+    provenanceIntro: 'Each figure should trace back to a manufacturer document; values are confirmed in the proposal.',
     cta: 'Need a customized commercial proposal?', 
     ctaBody: 'Receive a complete techno-economic assessment including local grid tariffs, CAPEX, and payback model.', 
     request: 'Request Proposal' 
@@ -85,18 +85,18 @@ const copy = {
     quote: '获取商业报价', 
     compare: '对比技术参数', 
     calculate: '测算配置',
-    verified: 'CATL PIM 官方审核', 
-    source: '官方源', 
-    checked: '核验时间', 
+    verified: 'PIM 初步数据', 
+    source: '来源', 
+    checked: '更新时间', 
     specs: '技术规格明细', 
-    specIntro: '所有技术参数均基于宁德时代官方技术规格书由工程师核对录入。', 
+    specIntro: '初步参数，用于工程选型；最终数值以现行制造商规格书为准并写入正式方案。', 
     noSpecs: '暂无已发布的技术数据。', 
     concept: 'CATL 储能设备概念示意图。', 
     architecture: '电网接入架构', 
     architectureBody: '通过 0.69/10(35) kV 升压变压器并网，具备继电保护、真空断路器与智能计量。', 
     stages: ['电网 / 新能源', '1500V 变流器', 'CATL 电池集装箱', 'Smart EMS / SCADA', '重要负荷'], 
-    docs: '官方技术资料中心', 
-    docsBody: '原厂技术规格书 (Datasheets)、安装操作手册及国际安全认证证书。', 
+    docs: '技术资料中心', 
+    docsBody: '制造商技术规格书 (Datasheets)、安装操作手册及合规文件。', 
     viewPdf: '预览 PDF',
     downloadPdf: '下载 PDF',
     noDocs: '该型号的技术文档可通过技术咨询获取。',
@@ -160,12 +160,9 @@ export function TenerProductDetailView({ product, locale = 'uk-UA', documents = 
   const root = `/${locale}`;
 
   const energySpecs = product.energySpecs as any;
-  const priceDisplay = energySpecs?.priceDisplayUah || (lang === 'en' ? 'Price on request' : lang === 'zh-CN' ? '价格电议' : 'Ціна за запитом');
-  const priceNote = lang === 'en' ? energySpecs?.priceNoteEn : lang === 'zh-CN' ? energySpecs?.priceNoteZh : energySpecs?.priceNoteUk;
-  const warranty = energySpecs?.warrantyYears || (lang === 'en' ? '10-Year Manufacturer Warranty' : lang === 'zh-CN' ? '10年原厂质保' : '10 років офіційної гарантії');
-  const availability = energySpecs?.availability === 'IN_STOCK'
-    ? (lang === 'en' ? 'In Stock (Ukraine)' : lang === 'zh-CN' ? '现货供应' : 'В наявності в Україні')
-    : (lang === 'en' ? 'Delivery 4-6 weeks' : lang === 'zh-CN' ? '定制生产 4-6 周' : 'Під замовлення 4-6 тижнів');
+  // Prices, lead times and warranty terms are commercial data: they are only stated in a proposal, never on the public card.
+  const priceDisplay = lang === 'en' ? 'Price, lead time and warranty terms — in the proposal' : lang === 'zh-CN' ? '价格、交期与质保条款见正式方案' : 'Ціна, строки й гарантійні умови — у ТКП';
+  const priceNote = lang === 'en' ? 'Confirmed after engineering review of your site and supply confirmation.' : lang === 'zh-CN' ? '在完成项目工程评估并确认供货后提供。' : 'Підтверджуються після інженерного аналізу майданчика та підтвердження постачання.';
 
   const facts = product.provenance.facts ?? {};
 
@@ -197,17 +194,9 @@ export function TenerProductDetailView({ product, locale = 'uk-UA', documents = 
               {/* Price Callout Box */}
               <div className="product-price-hero-box">
                 <div className="price-main-row">
-                  <span className="price-hero-val">{priceDisplay}</span>
-                  <span className="availability-pill">
-                    <CheckCircle2 size={13} />
-                    {availability}
-                  </span>
+                  <span className="price-hero-val" style={{ fontSize: 17 }}>{priceDisplay}</span>
                 </div>
-                {priceNote && <p className="price-hero-note">{priceNote}</p>}
-                <div className="warranty-tag">
-                  <ShieldCheck size={14} />
-                  <span>{warranty}</span>
-                </div>
+                <p className="price-hero-note">{priceNote}</p>
               </div>
 
               {/* Primary Actions */}
@@ -258,7 +247,7 @@ export function TenerProductDetailView({ product, locale = 'uk-UA', documents = 
                 <ShieldCheck size={24} />
                 <div>
                   <small>{labels.chemistry[index]}</small>
-                  <strong>{product.cellSpecs.chemistry || 'LFP'}</strong>
+                  <strong>{product.cellSpecs.chemistry || '—'}</strong>
                 </div>
               </div>
               <div className="fact-item">
@@ -463,7 +452,7 @@ export function TenerProductDetailView({ product, locale = 'uk-UA', documents = 
                     <code>{factPathKey}</code>
                     <span className="fact-verified-tag">
                       <ShieldCheck size={12} />
-                      {factData.verifiedBy || 'CATL Chief Engineer'}
+                      {factData.verifiedBy || '—'}
                     </span>
                   </div>
                   <blockquote className="fact-excerpt">{factData.excerpt}</blockquote>
@@ -473,7 +462,7 @@ export function TenerProductDetailView({ product, locale = 'uk-UA', documents = 
                     rel="noreferrer" 
                     className="fact-source-link"
                   >
-                    {factData.pageSection || 'Офіційний портал виробника'} <ArrowUpRight size={12} />
+                    {factData.pageSection || (lang === 'en' ? 'Source' : lang === 'zh-CN' ? '来源' : 'Джерело')} <ArrowUpRight size={12} />
                   </a>
                 </div>
               ))}

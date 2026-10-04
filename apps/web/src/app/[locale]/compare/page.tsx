@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 const titles = {
   'uk-UA': {
-    title: 'Порівняння стаціонарних систем CATL BESS | Офіційна платформа',
+    title: 'Порівняння стаціонарних систем CATL BESS',
     description: 'Порівняльна інженерна матриця систем накопичення енергії CATL: TENER, EnerOne, EnerC, PR-15 та UniC. Зіставлення ємності, потужності, C-rate та LCOS.',
     heading: 'Порівняння систем CATL ESS',
     intro: 'Оберіть від 2 до 4 моделей для детального порівняння параметрів, вартості, терміну служби та типу охолодження.',
@@ -19,7 +19,7 @@ const titles = {
     home: 'Головна',
   },
   en: {
-    title: 'CATL BESS Systems Comparison | Official Ukraine Platform',
+    title: 'CATL BESS Systems Comparison',
     description: 'Engineering comparison matrix for CATL energy storage: TENER, EnerOne, EnerC, PR-15, and UniC. Compare capacity, power, C-rate, and LCOS.',
     heading: 'CATL ESS Systems Comparison',
     intro: 'Select 2 to 4 systems to compare technical parameters, pricing, cycle lifetime, and thermal cooling.',
@@ -27,7 +27,7 @@ const titles = {
     home: 'Home',
   },
   'zh-CN': {
-    title: 'CATL 储能系统技术参数对比 | 乌克兰官方平台',
+    title: 'CATL 储能系统技术参数对比',
     description: 'CATL 储能系统对比矩阵：天恒 TENER、EnerOne、EnerC、PR-15 与 UniC 规格参数深度对比。',
     heading: 'CATL 储能系统对比矩阵',
     intro: '选择 2 至 4 款型号对比容量、功率、倍率、价格与温控方式。',

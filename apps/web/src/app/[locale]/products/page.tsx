@@ -10,12 +10,12 @@ export const dynamic = 'force-dynamic';
 
 const ui = {
   'uk-UA': {
-    title: 'Каталог систем накопичення енергії CATL | Офіційна платформа в Україні',
-    description: 'Офіційний каталог стаціонарних BESS та ESS CATL в Україні: системи для дому, бізнесу, підприємств, великі контейнери TENER та компоненти.',
+    title: 'Каталог систем накопичення енергії CATL для України',
+    description: 'Каталог стаціонарних BESS та ESS CATL для проєктів в Україні: системи для дому, бізнесу, підприємств, великі контейнери TENER та компоненти.',
     home: 'Головна',
     catalog: 'Каталог систем',
     heading: 'Системи накопичення енергії CATL',
-    intro: 'Повний модельний ряд стаціонарних накопичувачів, батарейних шаф, контейнерних рішень та компонентів із верифікованими характеристиками.',
+    intro: 'Повний модельний ряд стаціонарних накопичувачів, батарейних шаф, контейнерних рішень та компонентів з попередніми характеристиками — остаточні дані фіксуються в ТКП за datasheet виробника.',
     searchLabel: 'Пошук у каталозі',
     placeholder: 'Пошук за моделлю (TENER, EnerOne, PR-15, 314Ah) або категорією...',
     search: 'Шукати',
@@ -36,12 +36,12 @@ const ui = {
     ]
   },
   en: {
-    title: 'CATL Energy Storage Systems Catalog | Official Ukraine Platform',
-    description: 'Official stationary BESS & ESS catalog in Ukraine: Home storage, C&I cabinets, TENER container systems, and core components.',
+    title: 'CATL Energy Storage Systems Catalog for Ukraine',
+    description: 'Stationary BESS & ESS catalog for projects in Ukraine: Home storage, C&I cabinets, TENER container systems, and core components.',
     home: 'Home',
     catalog: 'Catalog',
     heading: 'CATL Energy Storage Systems',
-    intro: 'Comprehensive lineup of utility-scale containers, outdoor cabinets, residential ESS, and certified engineering components.',
+    intro: 'Comprehensive lineup of utility-scale containers, outdoor cabinets, residential ESS, and engineering components. Specifications are preliminary — final figures are fixed in the proposal.',
     searchLabel: 'Search catalog',
     placeholder: 'Search by model (TENER, EnerOne, PR-15, 314Ah) or category...',
     search: 'Search',
@@ -62,19 +62,19 @@ const ui = {
     ]
   },
   'zh-CN': {
-    title: 'CATL 储能系统产品目录 | 乌克兰官方技术平台',
-    description: 'CATL 乌克兰官方固定式储能产品目录：户用储能、工商业电池柜、天恒集装箱大储及核心部件。',
+    title: 'CATL 储能系统产品目录 | 乌克兰项目',
+    description: '面向乌克兰项目的 CATL 固定式储能产品目录：户用储能、工商业电池柜、天恒集装箱大储及核心部件。',
     home: '首页',
     catalog: '产品目录',
     heading: 'CATL 储能系统 (ESS / BESS)',
-    intro: '涵盖公用事业级集装箱系统、户外储能柜、户用系统及原厂核心部件的完整产品矩阵。',
+    intro: '涵盖公用事业级集装箱系统、户外储能柜、户用系统及核心部件。参数为初步数据，最终以正式方案为准。',
     searchLabel: '搜索产品',
     placeholder: '搜索型号 (天恒 TENER、EnerOne、PR-15、314Ah) 或分类...',
     search: '搜索',
     allTab: '全系列 (16)',
     unavailable: '目录数据暂时无法访问。',
     empty: '该分类下暂无已发布的产品',
-    emptyText: '所有产品参数均经过严格技术核实。如需选型帮助，请提交工程咨询。',
+    emptyText: '产品参数为初步数据，最终以制造商规格书为准。如需选型帮助，请提交工程咨询。',
     rfq: '提交工程咨询 →',
     more: '查看详情 →',
     compare: '对比',
@@ -147,7 +147,7 @@ export default async function ProductsPage({
           <div className="breadcrumbs">
             <Link href={`/${locale}`}>{t.home}</Link> / {t.catalog}
           </div>
-          <div className="eyebrow">CATL ENERGY STORAGE PLATFORM</div>
+          <div className="eyebrow">{locale === 'en' ? 'CATL TECHNOLOGY · CATALOG' : locale === 'zh-CN' ? 'CATL 技术 · 产品目录' : 'ТЕХНОЛОГІЇ CATL · КАТАЛОГ'}</div>
           <AnimatedSection direction="up" delay={0.05}>
             <h1>{t.heading}</h1>
             <p>{t.intro}</p>
@@ -239,8 +239,7 @@ function ProductCard({
 
   const energySpecs = product.energySpecs as any;
   const priceDisplay =
-    energySpecs?.priceDisplayUah ||
-    (isEn ? 'Price on request' : isZh ? '价格电议' : 'Ціна за запитом');
+    (isEn ? 'Price in the proposal' : isZh ? '价格见正式方案' : 'Ціна — у ТКП');
 
   return (
     <article className="product-card">
@@ -260,7 +259,7 @@ function ProductCard({
             {product.family} · {product.category}
           </div>
           <span className="provenance-tag">
-            <ShieldCheck size={11} /> {isEn ? 'Verified' : isZh ? '已核验' : 'Перевірено'}
+            <ShieldCheck size={11} /> {isEn ? 'Preliminary data' : isZh ? '初步数据' : 'Попередні дані'}
           </span>
         </div>
 

@@ -5,7 +5,7 @@ import { Search, FileText, ArrowRight, ShieldCheck, Layers } from 'lucide-react'
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
-  title: 'Пошук по платформі | KATL ESS Україна',
+  title: 'Пошук',
   robots: { index: false, follow: false },
 };
 
@@ -60,7 +60,7 @@ export default async function SearchPage({
       rfqPrompt: 'Не знайшли потрібної модифікації? Оформіть запит на інженерну оцінку.',
       rfqLink: 'Отримати комерційну пропозицію →',
       catProduct: 'Обладнання CATL',
-      catDoc: 'Офіційний документ',
+      catDoc: 'Документ',
     },
     'en': {
       tag: 'Unified Engineering Index',
@@ -74,7 +74,7 @@ export default async function SearchPage({
       rfqPrompt: 'Need a custom layout? Submit an engineering request.',
       rfqLink: 'Request Commercial Proposal →',
       catProduct: 'CATL Hardware',
-      catDoc: 'Official Document',
+      catDoc: 'Document',
     },
     'zh-CN': {
       tag: '统一工程索引库',
@@ -88,7 +88,7 @@ export default async function SearchPage({
       rfqPrompt: '需要定制化工程方案？请提交工程咨询申请。',
       rfqLink: '获取商业建议书 →',
       catProduct: 'CATL 储能产品',
-      catDoc: '官方技术文档',
+      catDoc: '技术文档',
     },
   }[locale === 'zh-CN' ? 'zh-CN' : locale === 'en' ? 'en' : 'uk-UA'];
 
@@ -152,7 +152,7 @@ export default async function SearchPage({
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs font-mono text-neutral-400 pb-2 border-b border-white/10">
                 <span>{t.foundPrefix} <strong className="text-emerald-400">{data.total}</strong></span>
-                <span>CATL Verified Index</span>
+                <span>Platform index</span>
               </div>
 
               <div className="space-y-3">

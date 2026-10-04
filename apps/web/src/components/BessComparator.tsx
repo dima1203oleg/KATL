@@ -82,7 +82,7 @@ export function BessComparator({
       {
         id: 'cRate',
         label: isEn ? 'C-rate' : isZh ? '充放电倍率' : 'Робочий C-rate',
-        getValue: (p: KatlProduct) => p.energySpecs.cRate || '0.5C',
+        getValue: (p: KatlProduct) => p.energySpecs.cRate || '—',
       },
       {
         id: 'cooling',
@@ -123,13 +123,13 @@ export function BessComparator({
         id: 'pricing',
         label: isEn ? 'Starting Price' : isZh ? '参考价格' : 'Орієнтовна ціна',
         getValue: (p: KatlProduct) =>
-          ((p.energySpecs as any)?.priceDisplayUah) || (isEn ? 'On request' : isZh ? '价格电议' : 'Ціна за запитом'),
+          (isEn ? 'In the proposal' : isZh ? '见正式方案' : 'У ТКП'),
       },
       {
         id: 'warranty',
         label: isEn ? 'Warranty' : isZh ? '质保周期' : 'Гарантійний строк',
         getValue: (p: KatlProduct) =>
-          ((p.energySpecs as any)?.warrantyYears) || (isEn ? '10 Years' : isZh ? '10 年' : '10 років'),
+          (isEn ? 'Per manufacturer docs' : isZh ? '以制造商文件为准' : 'За документацією виробника'),
       },
     ];
   }, [isEn, isZh]);
@@ -202,7 +202,7 @@ export function BessComparator({
               </th>
               {selectedProducts.map((prod) => {
                 const energySpecs = prod.energySpecs as any;
-                const price = energySpecs?.priceDisplayUah || (isEn ? 'On request' : isZh ? '价格电议' : 'Ціна за запитом');
+                const price = isEn ? 'In the proposal' : isZh ? '见正式方案' : 'У ТКП';
 
                 return (
                   <th key={prod.id} className="th-product">

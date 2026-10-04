@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { pimRepository } from '../../../../lib/pim/pimRepository';
 import { TenerProductDetailView } from '../../../../components/TenerProductDetailView';
+import { JsonLd, breadcrumbLd } from '../../../../components/seo/JsonLd';
+import { BRAND } from '../../../../lib/brand';
 
 export const dynamic='force-dynamic';
 type Props={params:Promise<{locale:string;slug:string}>};
@@ -32,5 +34,10 @@ export default async function ProductDetailPage({params}:Props){
    }
  }catch{return <main className="container content-section"><div className="error-note">Каталог тимчасово недоступний. Спробуйте пізніше.</div></main>;}
  if(!product)notFound();
- return <TenerProductDetailView product={product} locale={locale} documents={documents}/>;
+ const home=locale==='en'?'Home':locale==='zh-CN'?'首页':'Головна';
+ const catalog=locale==='en'?'Catalog':locale==='zh-CN'?'产品目录':'Каталог';
+ const productLd={'@context':'https://schema.org','@type':'Product','name':product.name,'description':product.shortDesc,'category':product.category,
+  'brand':{'@type':'Brand','name':'CATL'},'manufacturer':{'@type':'Organization','name':'CATL'},
+  'image':`${BRAND.siteUrl}/design/products/${encodeURIComponent(product.id)}.webp`,'url':`${BRAND.siteUrl}/${locale}/products/${encodeURIComponent(product.id)}`};
+ return <><JsonLd data={productLd}/><JsonLd data={breadcrumbLd([[home,`/${locale}`],[catalog,`/${locale}/products`],[product.name,`/${locale}/products/${encodeURIComponent(product.id)}`]])}/><TenerProductDetailView product={product} locale={locale} documents={documents}/></>;
 }

@@ -7,10 +7,17 @@ import { AnimatedSection, AnimatedStaggerGroup, AnimatedStaggerItem } from '../.
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Галузеві рішення BESS | KATL ESS Україна',
-  description: 'Комплексні рішення стаціонарного накопичення енергії CATL для приватних будинків, комерційного сектору, промисловості та операторів енергосистеми.',
-};
+const SOL_META = {
+  'uk-UA': { title: 'Рішення BESS: peak shaving, резерв, СЕС, арбітраж', description: 'Сценарії застосування систем накопичення енергії для бізнесу, промисловості та енергосистеми: зрізання піків, резервне живлення, СЕС + накопичення, арбітраж, мікромережі.' },
+  en: { title: 'BESS solutions: peak shaving, backup, solar, arbitrage', description: 'Battery energy storage use cases for business, industry and the grid: peak shaving, backup power, solar + storage, arbitrage and microgrids.' },
+  'zh-CN': { title: '储能解决方案：削峰、备用、光储、套利', description: '面向工商业与电网的储能应用：削峰、备用电源、光伏 + 储能、套利与微电网。' },
+} as const;
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const m = SOL_META[locale === 'en' ? 'en' : locale === 'zh-CN' ? 'zh-CN' : 'uk-UA'];
+  return { title: m.title, description: m.description, alternates: { canonical: `/${locale}/solutions`, languages: { 'uk-UA': '/uk-UA/solutions', en: '/en/solutions', 'zh-CN': '/zh-CN/solutions', 'x-default': '/uk-UA/solutions' } } };
+}
 
 export default async function SolutionsPage({
   params,

@@ -4,6 +4,19 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { BatteryCharging, BookOpen, BriefcaseBusiness, ChevronDown, Globe2, Menu, Search, X, Zap } from 'lucide-react';
+import { BRAND } from '../lib/brand';
+
+/** KATL mark: a cell with three rising charge bars. */
+function BrandMark() {
+  return (
+    <svg className="kx-brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="1" y="1" width="30" height="30" rx="8" fill="#0a0e14" />
+      <rect x="8" y="17" width="4" height="8" rx="1.5" fill="#23d3a6" />
+      <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#23d3a6" />
+      <rect x="20" y="7" width="4" height="18" rx="1.5" fill="#2b63ff" />
+    </svg>
+  );
+}
 
 const translations: Record<string, Record<string, string>> = {
   'uk-UA': {
@@ -23,7 +36,7 @@ const translations: Record<string, Record<string, string>> = {
     quote: 'Отримати ТКП',
     account: 'Кабінет',
     search: 'Пошук',
-    all: 'Усі сертифіковані системи',
+    all: 'Усі системи каталогу',
     designer: 'BESS Designer',
   },
   en: {
@@ -40,10 +53,10 @@ const translations: Record<string, Record<string, string>> = {
     knowledge: 'Knowledge',
     partners: 'Partners',
     about: 'About',
-    quote: 'Request TKP',
+    quote: 'Request a proposal',
     account: 'Account',
     search: 'Search',
-    all: 'All certified systems',
+    all: 'All catalog systems',
     designer: 'BESS Designer',
   },
   'zh-CN': {
@@ -63,7 +76,7 @@ const translations: Record<string, Record<string, string>> = {
     quote: '获取技术方案',
     account: '账户',
     search: '搜索',
-    all: '全系列认证产品',
+    all: '全部目录产品',
     designer: 'BESS 设计器',
   },
 };
@@ -90,9 +103,10 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="container header-inner">
-        <Link href={root} className="brand" aria-label="CATL — на головну">
-          <span className="brand-wordmark">CATL</span>
-          <span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span>
+        <Link href={root} className="brand kx-brand" aria-label={locale === 'en' ? 'KATL — home' : locale === 'zh-CN' ? 'KATL — 首页' : 'KATL — на головну'}>
+          <BrandMark />
+          <span className="kx-brand-word">KATL</span>
+          <span className="kx-brand-cap">ENERGY STORAGE<br/>PLATFORM</span>
         </Link>
         <nav className="primary-nav" aria-label="Головна навігація">
           {/* Products Nav Item with Mega Menu */}
@@ -105,7 +119,7 @@ export function SiteHeader() {
                 <div className="mega-heading">Каталог та порівняння</div>
                 <Link className="mega-link" href={`${root}/products`}>
                   {t.catalog}
-                  <span>{locale === 'en' ? 'Tener, EnerOne, EnerC+, EnerX, Commercial' : locale === 'zh-CN' ? 'Tener, EnerOne, EnerC+ 等原厂系统' : 'Tener, EnerOne, EnerC+, EnerX, Комерційні'}</span>
+                  <span>{locale === 'en' ? 'Tener, EnerOne, EnerC+, EnerX, Commercial' : locale === 'zh-CN' ? 'TENER、EnerOne、EnerC+ 等系统' : 'Tener, EnerOne, EnerC+, EnerX, Комерційні'}</span>
                 </Link>
                 <Link className="mega-link" href={`${root}/compare`}>
                   {t.compare}
@@ -163,7 +177,7 @@ export function SiteHeader() {
               </div>
               <div className="mega-cta">
                 <div>
-                  <div className="mega-heading">Офіційне ТКП</div>
+                  <div className="mega-heading">ТКП</div>
                   <strong>{locale === 'en' ? 'Project Feasibility Study' : locale === 'zh-CN' ? '项目可行性研究与正式报价' : 'ТЕО та комерційна пропозиція'}</strong>
                   <p style={{ fontSize: 12, color: '#667085', margin: '4px 0 12px' }}>
                     {locale === 'en' ? 'Get engineered proposal with Ukraine tariff analysis.' : locale === 'zh-CN' ? '结合乌克兰最新电价政策量身定制。' : 'Отримайте розрахунок під графік тарифів та ліміти мережі вашого підприємства.'}
@@ -274,13 +288,13 @@ export function SiteFooter() {
   return <footer className="site-footer">
     <div className="container">
       <div className="footer-grid">
-        <div className="footer-brand"><Link href={`/${locale}`} className="brand"><span className="brand-wordmark">CATL</span><span className="brand-caption">ENERGY STORAGE<br/>SOLUTIONS</span></Link><p>{en?'Information, tools and project requests for CATL energy storage systems in Ukraine.':zh?'乌克兰 CATL 储能系统的信息、工具与项目咨询。':'Інформація, інструменти та запити щодо систем накопичення енергії CATL для проєктів в Україні.'}</p></div>
+        <div className="footer-brand"><Link href={`/${locale}`} className="brand kx-brand"><BrandMark /><span className="kx-brand-word">KATL</span><span className="kx-brand-cap">ENERGY STORAGE<br/>PLATFORM</span></Link><p>{en?'Engineering, financial modelling, logistics and service for battery energy storage projects in Ukraine — on CATL technology.':zh?'基于 CATL 技术，为乌克兰储能项目提供工程、财务模型、物流与服务。':'Інженерія, фінансове моделювання, логістика та сервіс для проєктів накопичення енергії в Україні — на технологіях CATL.'}</p></div>
         <FooterColumn title={en?'Products':zh?'产品':'Продукція'} links={[[en?'Catalog':zh?'产品目录':'Каталог систем', `/${locale}/products`],[en?'Compare':zh?'对比':'Порівняння', `/${locale}/compare`],[en?'Documents':zh?'文档':'Документи', `/${locale}/documents`]]} />
         <FooterColumn title={en?'Solutions':zh?'解决方案':'Рішення'} links={[[en?'All solutions':zh?'全部解决方案':'Усі рішення', `/${locale}/solutions`],[en?'Industries':zh?'行业':'Для галузей', `/${locale}/industries`],[en?'BESS in Ukraine':zh?'乌克兰储能':'BESS в Україні', `/${locale}/energy-storage-ukraine`]]} />
         <FooterColumn title={en?'Engineering':zh?'工程':'Інженерія'} links={[["BESS Designer", `/${locale}/bess-designer`],[en?'Calculators':zh?'计算器':'Калькулятори', `/${locale}/engineering`],[en?'Knowledge':zh?'知识库':'База знань', `/${locale}/resources`]]} />
         <FooterColumn title={en?'Company':zh?'公司':'Компанія'} links={[[en?'About this site':zh?'关于本站':'Про сайт', `/${locale}/about`],[en?'Partners':zh?'合作伙伴':'Партнерам', `/${locale}/partner`],[en?'Contact':zh?'联系':'Контакти', `/${locale}/contact`],[en?'Request a proposal':zh?'提交需求':'Запит пропозиції', `/${locale}/rfq`]]} />
       </div>
-      <div className="footer-bottom"><span>© {new Date().getFullYear()} catl.site · {en?'KATL platform':zh?'KATL 平台':'платформа KATL'}</span><span>{en?'CATL is the product manufacturer. Partnership status and legal details are published only when confirmed.':zh?'CATL 为产品制造商。合作状态和法律信息仅在确认后发布。':'CATL є виробником продукції. Статус партнерства та юридичні реквізити вказуються лише після підтвердження.'}</span><span><Link href={`/${locale}/privacy`}>{en?'Privacy':zh?'隐私':'Приватність'}</Link> · <Link href={`/${locale}/terms`}>{en?'Terms':zh?'条款':'Умови'}</Link></span></div>
+      <div className="footer-bottom"><span>© {new Date().getFullYear()} KATL · {en?'Energy Storage Platform':zh?'储能项目平台':'платформа систем накопичення енергії'}</span><span>{BRAND.disclosure[en?'en':zh?'zh-CN':'uk-UA']}</span><span><Link href={`/${locale}/privacy`}>{en?'Privacy':zh?'隐私':'Приватність'}</Link> · <Link href={`/${locale}/terms`}>{en?'Terms':zh?'条款':'Умови'}</Link></span></div>
     </div>
   </footer>;
 }

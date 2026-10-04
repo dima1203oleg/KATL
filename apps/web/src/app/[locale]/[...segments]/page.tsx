@@ -122,7 +122,7 @@ const pagesEn: Record<string, PageInfo> = {
     title: 'CATL Energy Storage in Ukraine',
     intro: 'Official technical and information gateway for stationary CATL battery energy storage systems.',
     items: [
-      'Verified product datasheets and specifications for utility and C&I BESS.',
+      'Product datasheets and specifications for utility and C&I BESS.',
       'Custom techno-economic modeling aligned with Ukraine electricity market tariffs.',
       'Direct technical interface for grid operators, EPC contractors, and project developers.',
     ],
@@ -285,7 +285,7 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${item.title} | CATL ESS`,
+    title: item.title,
     description: item.intro,
     alternates: { canonical: `/${locale}/${path}` },
     ...(path === 'login' ? { robots: { index: false, follow: false } } : {}),

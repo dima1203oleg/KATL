@@ -6,7 +6,7 @@ const origin = (process.env.PUBLIC_SITE_URL || 'https://catl.site').replace(/\/$
 const privatePaths = ['/api/', '/admin', '/account/', '/partner/', '/customer/'];
 
 export default function robots(): MetadataRoute.Robots {
-  const publicSearchAgents = ['Googlebot', 'Bingbot', 'OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Perplexity-User'];
+  const publicSearchAgents = ['Googlebot', 'Bingbot', 'Applebot', 'Baiduspider', 'OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Perplexity-User', 'Claude-SearchBot', 'Claude-User'];
   return {
     rules: [
       { userAgent: '*', allow: '/', disallow: privatePaths },

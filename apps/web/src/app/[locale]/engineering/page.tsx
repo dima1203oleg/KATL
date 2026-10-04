@@ -62,7 +62,7 @@ const ui = {
       {
         id: 'docs',
         title: 'Технічна документація',
-        desc: 'Офіційні паспорти обладнання (Datasheets), сертифікати випробувань TÜV / UL 9540A та керівництва користувача.',
+        desc: 'Паспорти обладнання (Datasheets), протоколи випробувань і керівництва користувача.',
         href: '/documents',
         icon: FileText,
         badge: 'Паспорти'
@@ -81,7 +81,7 @@ const ui = {
     ctaBtn: 'Створити інженерний запит'
   },
   en: {
-    title: 'CATL BESS Engineering Tools & Calculators | Official Platform',
+    title: 'BESS Engineering Tools & Calculators',
     description: 'Engineering calculation suite for CATL energy storage: system sizing, LCOS, Single Line Diagrams, and technical configurators.',
     home: 'Home',
     engineering: 'Engineering',
@@ -142,7 +142,7 @@ const ui = {
     ctaBtn: 'Submit Engineering Request'
   },
   'zh-CN': {
-    title: 'CATL 储能工程工具与计算器 | 乌克兰官方平台',
+    title: '储能工程工具与计算器',
     description: 'CATL 储能系统工程工具套件：容量测算、LCOS 平准化成本、电气主接线图 (SLD) 及方案配置器。',
     home: '首页',
     engineering: '工程工具',

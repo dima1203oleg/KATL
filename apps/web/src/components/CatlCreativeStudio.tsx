@@ -334,7 +334,7 @@ export function CatlCreativeStudio({ locale = 'uk-UA' }: Props) {
               <p>{levels[activeLevel].desc}</p>
             </div>
             <p className="creative-note">
-              {isEn ? 'Official CATL warranty applies directly down to cell chemistry and cycle stability.' : isZh ? '原厂质保直接溯源至电芯循环寿命与化学稳定性。' : 'Офіційна гарантія CATL поширюється безпосередньо на хімію комірок.'}
+              {isEn ? 'Warranty scope and cycle terms are defined in the manufacturer documentation for each project.' : isZh ? '质保范围与循环条款以每个项目的制造商文件为准。' : 'Обсяг гарантії та циклові умови визначаються документацією виробника для конкретного проєкту.'}
             </p>
           </div>
         </article>
@@ -367,7 +367,7 @@ export function CatlCreativeStudio({ locale = 'uk-UA' }: Props) {
               <p>{parts[activePart].desc}</p>
             </div>
             <p className="creative-note">
-              {isEn ? 'All components strictly certified under IEC 62619, UL 9540A & grid code.' : isZh ? '各子系统完全符合 IEC 62619 与 UL 9540A 国际严苛安全标准。' : 'Усе обладнання відповідає ДСТУ EN 62619, UL 9540A та Кодексу систем розподілу.'}
+              {isEn ? 'Applicable certificates (e.g. IEC 62619, UL 9540A) are checked per specific product and project.' : isZh ? '适用认证（如 IEC 62619、UL 9540A）按具体产品与项目核验。' : 'Застосовні сертифікати (напр. IEC 62619, UL 9540A) перевіряються для конкретного продукту й проєкту.'}
             </p>
           </div>
         </article>

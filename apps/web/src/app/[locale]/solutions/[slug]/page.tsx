@@ -1,11 +1,97 @@
-import Link from 'next/link';import type {Metadata} from 'next';import {notFound} from 'next/navigation';import {ArrowRight,Sun,Zap,Gauge,BatteryCharging,Network,Factory} from 'lucide-react';
-const content:Record<string,{title:string;summary:string;problem:string;inputs:string[];links:string[]}>={
- 'solar-bess':{title:'Сонячна енергетика + BESS',summary:'Як оцінити взаємодію фотоелектричної генерації, накопичення, навантаження та мережі на одному майданчику.',problem:'Профіль генерації СЕС не завжди збігається з графіком споживання. Накопичення може змінити час використання енергії, але результат залежить від навантаження, мережевих правил і параметрів системи.',inputs:['Погодинний профіль генерації та споживання','Обмеження експорту й умови приєднання','Потрібна потужність і час віддачі','Режим роботи та резерв для критичних навантажень'],links:['BESS Calculator','BESS Designer','Документи']},
- 'peak-shaving':{title:'Peak shaving для підприємства',summary:'Оцініть, чи може накопичення впливати на піки потужності з урахуванням графіка навантаження.',problem:'Для попередньої оцінки потрібні інтервали вимірювання навантаження та правила, за якими формується плата за потужність. Одного місячного значення споживання недостатньо.',inputs:['Інтервальні дані навантаження','Період і тривалість пікових подій','Доступна потужність мережі','Тарифна структура та вимоги до резерву'],links:['BESS Calculator','Інженерна оцінка','RFQ']},
- 'backup-power':{title:'Резервне живлення',summary:'Почніть із критичних навантажень, часу автономії та допустимого переходу між джерелами.',problem:'Резервування вимагає узгодження характеристик навантаження, часу перемикання, режиму роботи PCS, захистів і наявних генераторів.',inputs:['Перелік критичних споживачів і їх пускові струми','Бажаний час автономії','Допустимий час перерви','Наявність UPS або генератора'],links:['BESS Calculator','BESS Designer','RFQ']},
- 'energy-arbitrage':{title:'Арбітраж енергії',summary:'Оцініть цикли заряджання та віддачі на основі погодинних цін, обмежень мережі й ефективності.',problem:'Економічний результат не можна визначити без профілю цін, правил ринку, доступу до торгівлі, вартості втрат і деградації.',inputs:['Погодинна структура цін','Доступні режими заряджання','ККД і технічні обмеження з підтверджених джерел','Витрати на обслуговування й балансування'],links:['LCOS','BESS Calculator','RFQ']},
- 'microgrid':{title:'BESS для мікромережі',summary:'Архітектуру визначають джерела, навантаження, режим острова, система керування та схема захистів.',problem:'Острівна робота й синхронізація з мережею мають бути підтверджені сумісністю конкретних компонентів і проєктним розрахунком.',inputs:['Однолінійна схема майданчика','Джерела генерації та їх режими','Критичні навантаження','Вимоги до резервування та переходу в острів'],links:['BESS Designer','Інженерія','RFQ']},
- 'ev-charging':{title:'BESS для зарядної інфраструктури',summary:'Оцініть піковий попит швидких зарядних станцій у межах доступної потужності приєднання.',problem:'Потрібно врахувати одночасність заряджання, графік сесій, потужність мережі, генерацію та очікуваний розвиток локації.',inputs:['Кількість і потужність зарядних точок','Профіль сесій і одночасність','Доступна потужність приєднання','План розвитку майданчика'],links:['BESS Calculator','Рішення для підприємств','RFQ']},
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
+import { solutions, toolLinks } from '../../../../data/solutions';
+import { glossary } from '../../../../data/glossary';
+import { asLocale, languageAlternates, LOCALES, type Locale } from '../../../../lib/brand';
+import { JsonLd, breadcrumbLd } from '../../../../components/seo/JsonLd';
+
+const L: Record<Locale, { home: string; sols: string; how: string; drivers: string; inputs: string; arch: string; terms: string; tools: string; start: string; rfq: string; note: string; kicker: string }> = {
+  'uk-UA': { home: 'Головна', sols: 'Рішення', how: 'Як це працює', drivers: 'Що визначає економічний ефект', inputs: 'Дані для попередньої оцінки', arch: 'Типова архітектура', terms: 'Терміни', tools: 'Інструменти', start: 'Оцінити параметри', rfq: 'Інженерний запит', kicker: 'СЦЕНАРІЙ ЗАСТОСУВАННЯ', note: 'Загальна інженерна інформація. Конкретне обладнання, сумісність і фінансовий результат підтверджуються після аналізу даних майданчика та документації виробника.' },
+  en: { home: 'Home', sols: 'Solutions', how: 'How it works', drivers: 'What drives the economics', inputs: 'Data for a preliminary assessment', arch: 'Typical architecture', terms: 'Terms', tools: 'Tools', start: 'Estimate parameters', rfq: 'Engineering request', kicker: 'USE CASE', note: 'General engineering information. Specific equipment, compatibility and financial outcome are confirmed after analysing site data and manufacturer documentation.' },
+  'zh-CN': { home: '首页', sols: '解决方案', how: '工作原理', drivers: '影响经济性的因素', inputs: '初步评估所需资料', arch: '典型架构', terms: '术语', tools: '工具', start: '估算参数', rfq: '工程咨询', kicker: '应用场景', note: '本页为一般工程信息。具体设备、兼容性与财务结果需在分析现场数据与制造商文件后确认。' },
 };
-export async function generateMetadata({params}:{params:Promise<{locale:string;slug:string}>}):Promise<Metadata>{const {slug}=await params;return {title:content[slug]?.title||'Рішення BESS',description:content[slug]?.summary};}
-export default async function SolutionDetail({params}:{params:Promise<{locale:string;slug:string}>}){const {locale,slug}=await params;const item=content[slug];if(!item||locale!=='uk-UA')notFound();const Icon=slug==='solar-bess'?Sun:slug==='peak-shaving'?Gauge:slug==='backup-power'?Zap:slug==='microgrid'?Network:slug==='ev-charging'?Factory:BatteryCharging;return <main><section className="page-hero"><div className="container"><div className="breadcrumbs"><Link href={`/${locale}`}>Головна</Link>　/　<Link href={`/${locale}/solutions`}>Рішення</Link>　/　{item.title}</div><span className="icon-box"><Icon size={22}/></span><h1>{item.title}</h1><p>{item.summary}</p><div className="hero-actions"><Link className="button" href={`/${locale}/engineering/bess-calculator`}>Оцінити параметри <ArrowRight size={15}/></Link><Link className="button button-secondary" href={`/${locale}/rfq`}>Створити інженерний запит</Link></div></div></section><section className="content-section"><div className="container" style={{maxWidth:920}}><article className="prose"><h2>Що потрібно врахувати</h2><p>{item.problem}</p><h2>Дані для попереднього підбору</h2><ul>{item.inputs.map(input=><li key={input}>{input}</li>)}</ul><h2>Наступні кроки</h2><div className="journey-grid">{item.links.map(link=><Link key={link} className="journey-card" href={link==='RFQ'?`/${locale}/rfq`:link==='LCOS'?`/${locale}/engineering/lcos`:link==='Документи'?`/${locale}/documents`:link.includes('BESS')||link==='Інженерія'?`/${locale}/engineering`: `/${locale}/engineering/bess-calculator`}><h3>{link}</h3><p>Перейдіть до інструмента або надішліть параметри майданчика.</p><span className="card-arrow">→</span></Link>)}</div><p className="status-note">Сторінка містить загальну інженерну інформацію. Конкретний CATL продукт, сумісність і фінансова доцільність підтверджуються після аналізу джерел і майданчика.</p></article></div></section></main>}
+const k = (l: Locale) => (l === 'en' ? 'en' : l === 'zh-CN' ? 'zh' : 'uk') as 'uk' | 'en' | 'zh';
+
+export function generateStaticParams() {
+  return LOCALES.flatMap((locale) => solutions.map((s) => ({ locale, slug: s.slug })));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
+  const { locale: raw, slug } = await params;
+  const locale = asLocale(raw);
+  const s = solutions.find((x) => x.slug === slug);
+  if (!s) return {};
+  const alt = languageAlternates(`/solutions/${slug}`);
+  return {
+    title: s.title[k(locale)],
+    description: s.summary[k(locale)],
+    alternates: { canonical: alt.canonicalFor(locale), languages: alt.languages },
+    openGraph: { title: s.title[k(locale)], description: s.summary[k(locale)], type: 'article', locale },
+  };
+}
+
+export default async function SolutionDetail({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+  const { locale: raw, slug } = await params;
+  if (!(LOCALES as string[]).includes(raw)) notFound();
+  const locale = asLocale(raw);
+  const s = solutions.find((x) => x.slug === slug);
+  if (!s) notFound();
+  const t = L[locale];
+  const key = k(locale);
+  const root = `/${locale}`;
+
+  return (
+    <main className="kx kx-doc">
+      <JsonLd data={breadcrumbLd([[t.home, root], [t.sols, `${root}/solutions`], [s.title[key], `${root}/solutions/${slug}`]])} />
+      <section className="kx-doc-hero">
+        <div className="kx-wrap">
+          <nav className="kx-crumbs" aria-label="Breadcrumb">
+            <Link href={root}>{t.home}</Link><span aria-hidden="true">/</span>
+            <Link href={`${root}/solutions`}>{t.sols}</Link><span aria-hidden="true">/</span>
+            <span aria-current="page">{s.title[key]}</span>
+          </nav>
+          <span className="kx-kicker" style={{ marginTop: 28 }}>{t.kicker}</span>
+          <h1>{s.title[key]}</h1>
+          <p className="kx-lead">{s.summary[key]}</p>
+          <div className="kx-actions">
+            <Link className="kx-btn kx-btn-primary" href={`${root}/bess-designer`}>{t.start}<ArrowRight size={16} /></Link>
+            <Link className="kx-btn kx-btn-ghost" href={`${root}/rfq`}>{t.rfq}</Link>
+          </div>
+        </div>
+      </section>
+
+      <div className="kx-wrap kx-doc-grid">
+        <article className="kx-prose">
+          <h2>{t.how}</h2>
+          <p>{s.how[key]}</p>
+          <h2>{t.drivers}</h2>
+          <ul>{s.drivers[key].map((d) => <li key={d}>{d}</li>)}</ul>
+          <h2>{t.inputs}</h2>
+          <ol className="kx-checklist">
+            {s.inputs[key].map((d, i) => <li key={d}><span>{String(i + 1).padStart(2, '0')}</span><span>{d}</span></li>)}
+          </ol>
+          <h2>{t.arch}</h2>
+          <p>{s.architecture[key]}</p>
+          <p className="kx-note">{t.note}</p>
+        </article>
+        <aside className="kx-side">
+          <div className="kx-side-card">
+            <h3>{t.tools}</h3>
+            {s.tools.map((tool) => (
+              <Link key={tool} href={`${root}${toolLinks[tool].path}`}>{toolLinks[tool][key]}<ArrowRight size={15} /></Link>
+            ))}
+          </div>
+          <div className="kx-side-card">
+            <h3>{t.terms}</h3>
+            {s.terms.map((slugT) => {
+              const g = glossary.find((x) => x.slug === slugT);
+              return g ? <Link key={slugT} href={`${root}/resources/glossary#${slugT}`}>{g.term}<ArrowRight size={15} /></Link> : null;
+            })}
+          </div>
+        </aside>
+      </div>
+    </main>
+  );
+}
